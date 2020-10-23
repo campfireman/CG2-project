@@ -43,6 +43,7 @@
 #include <QColor>
 #include <QSlider>
 #include <QGroupBox>
+#include <QWidget>
 
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
@@ -177,6 +178,31 @@ void ImageViewer::generateControlPanels()
     m_option_layout2->addWidget(spinbox1);
 
     tabWidget->addTab(m_option_panel2, "2");
+
+    // ex3
+
+    QWidget *m_option_panel3 = new QWidget();
+    QVBoxLayout *m_option_layout3 = new QVBoxLayout();
+    m_option_panel3->setLayout(m_option_layout3);
+
+    tabWidget->addTab(m_option_panel3, "3");
+
+    // ex4
+
+    QWidget *m_option_panel4 = new QWidget();
+    QVBoxLayout *m_option_layout4 = new QVBoxLayout();
+    m_option_panel4->setLayout(m_option_layout4);
+
+    tabWidget->addTab(m_option_panel4, "4");
+
+    // ex5
+
+    QWidget *m_option_panel5 = new QWidget();
+    QVBoxLayout *m_option_layout5 = new QVBoxLayout();
+    m_option_panel5->setLayout(m_option_layout5);
+
+    tabWidget->addTab(m_option_panel5, "5");
+
     tabWidget->show();
 }
 
