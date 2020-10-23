@@ -38,106 +38,147 @@
 **
 ****************************************************************************/
 
+#include <Qt>
 #include <QtWidgets>
+#include <QColor>
+#include <QSlider>
+#include <QGroupBox>
+
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
 #endif
-#include<iostream>
-
+#include <iostream>
 
 #include "imageviewer-qt5.h"
+
+#define CROSS_SLIDER_DEFAULT 49
 
 ImageViewer::ImageViewer()
 {
 
-	image=NULL;
-	resize(1600, 600);
-	
-	startLogging();
+    image = NULL;
+    original_image = NULL;
+    cross_slider_value = CROSS_SLIDER_DEFAULT;
+    resize(1600, 600);
 
-	generateMainGui();
-	renewLogging();
+    startLogging();
 
-	generateControlPanels();
-    	createActions();
-    	createMenus();
+    generateMainGui();
+    renewLogging();
 
-    	resize(QGuiApplication::primaryScreen()->availableSize() * 0.85 );
+    generateControlPanels();
+    createActions();
+    createMenus();
 
+    resize(QGuiApplication::primaryScreen()->availableSize() * 0.85);
+}
+
+bool ImageViewer::imageIsLoaded()
+{
+    return image != NULL && original_image != NULL;
 }
 
 void ImageViewer::applyExampleAlgorithm()
 {
-	if(image!=NULL)
-	{
-		for(int i=0;i<std::min(image->width(),image->height());i++)
-		{
-			// macht die Farbe schwarz, bitte recherchieren wie eine andere Farbe gesetzt wird ...
-			image->setPixel(i,i,0);
-		}
-	updateImageDisplay();
- 	logFile << "example algorithm applied " << std::endl;
-	renewLogging();
-	}
-
-       
- 	
+    if (image != NULL)
+    {
+        for (int i = 0; i < std::min(image->width(), image->height()); i++)
+        {
+            // macht die Farbe schwarz, bitte recherchieren wie eine andere Farbe gesetzt wird ...
+            image->setPixel(i, i, 0);
+        }
+        updateImageDisplay();
+        logFile << "example algorithm applied " << std::endl;
+        renewLogging();
+    }
 }
 
-/**************************************************************************************** 
-*   
-*  mit dieser Methode können sie sich pro Aufgabe ein  Tab anlegen, in der die Ein-
-*  stellungen per Slider, Button, Checkbox etc. gemacht werden und die zu implemen-
-*  tierenden Algorithmen gestatet werden.
-*
-*****************************************************************************************/
+void ImageViewer::drawCross()
+{
+    if (imageIsLoaded())
+    {
+        int size = std::min(image->width(), image->height());
+        int max_width = (int)(size * ((cross_slider_value + 1) / 100.0));
+        int offset = (int)((size - max_width) / 2.0);
+        for (int i = 0; i < size; i++)
+        {
+            int x_l = i;
+            int y_l = i;
+            int x_r = size - i - 1;
+            int y_r = i;
+
+            if (i > offset && i < offset + max_width)
+            {
+                image->setPixelColor(x_l, y_l, QColor(255, 0, 0));
+                image->setPixelColor(x_r, y_r, QColor(255, 0, 0));
+            }
+            else
+            {
+                image->setPixelColor(x_l, y_l, original_image->pixelColor(x_l, y_l));
+                image->setPixelColor(x_r, y_r, original_image->pixelColor(x_r, y_l));
+            }
+        }
+        updateImageDisplay();
+        logFile << "drew red cross" << std::endl;
+        renewLogging();
+    }
+}
+
+void ImageViewer::crossSliderValueChanged(int value)
+{
+    cross_slider_value = value;
+    logFile << "slider value: " << value << std::endl;
+    renewLogging();
+    drawCross();
+}
 
 void ImageViewer::generateControlPanels()
 {
-	// first tab
+    // ex1
 
-    	m_option_panel1 = new QWidget();
-	m_option_layout1 = new QVBoxLayout();
-	m_option_panel1->setLayout(m_option_layout1);      
+    m_option_panel1 = new QWidget();
+    m_option_layout1 = new QVBoxLayout();
+    m_option_panel1->setLayout(m_option_layout1);
 
+    button1 = new QPushButton();
+    button1->setText("Apply algorithm");
+    QObject::connect(button1, SIGNAL(clicked()), this, SLOT(applyExampleAlgorithm()));
 
-	button1 = new QPushButton();
-	button1->setText("Apply algorithm");
+    QGroupBox *cross_group = new QGroupBox("Red cross");
+    QVBoxLayout *cross_layout = new QVBoxLayout();
 
-	button2 = new QPushButton();
-	button2->setText("do something else");
+    QLabel *cross_slider_label = new QLabel("Cross width");
+    QSlider *cross_slider = new QSlider(Qt::Horizontal);
+    cross_slider->setValue(CROSS_SLIDER_DEFAULT);
+    QObject::connect(cross_slider, SIGNAL(valueChanged(int)), this, SLOT(crossSliderValueChanged(int)));
 
-	QObject::connect(button1, SIGNAL (clicked()), this, SLOT (applyExampleAlgorithm()));
- 
-	m_option_layout1->addWidget(button1);
-	m_option_layout1->addWidget(button2);
-	tabWidget->addTab(m_option_panel1,"first tab");   
+    cross_draw_button = new QPushButton();
+    cross_draw_button->setText("Draw Cross");
+    QObject::connect(cross_draw_button, SIGNAL(clicked()), this, SLOT(drawCross()));
 
+    cross_layout->addWidget(cross_slider_label);
+    cross_layout->addWidget(cross_slider);
+    cross_layout->addWidget(cross_draw_button);
+    cross_group->setLayout(cross_layout);
 
-	// another tab 
+    m_option_layout1->addWidget(button1);
+    m_option_layout1->addWidget(cross_group);
+    tabWidget->addTab(m_option_panel1, "1");
 
-        m_option_panel2 = new QWidget();
-	m_option_layout2 = new QVBoxLayout();
-	m_option_panel2->setLayout(m_option_layout2);      
+    // ex2
 
-	spinbox1 = new QSpinBox(tabWidget);
+    m_option_panel2 = new QWidget();
+    m_option_layout2 = new QVBoxLayout();
+    m_option_panel2->setLayout(m_option_layout2);
 
-	m_option_layout2->addWidget(new QLabel("description of parameter etc."));
-	m_option_layout2->addWidget(spinbox1);
+    spinbox1 = new QSpinBox(tabWidget);
 
-	tabWidget->addTab(m_option_panel2,"another tab");
-	tabWidget->show();
+    m_option_layout2->addWidget(new QLabel("description of parameter etc."));
+    m_option_layout2->addWidget(spinbox1);
 
-
-	// Hinweis: Es bietet sich an pro Aufgabe jeweils einen solchen Tab zu erstellen
-
+    tabWidget->addTab(m_option_panel2, "2");
+    tabWidget->show();
 }
-
-
-
-
-
-
 
 /**************************************************************************************** 
 *
@@ -147,107 +188,105 @@ void ImageViewer::generateControlPanels()
 *
 *****************************************************************************************/
 
-
-
 void ImageViewer::startLogging()
 {
-	//LogFile
-	logFile.open("log.txt", std::ios::out);
-	logFile << "Logging: \n" << std::endl;
+    //LogFile
+    logFile.open("log.txt", std::ios::out);
+    logFile << "Logging: \n"
+            << std::endl;
 }
 
 void ImageViewer::renewLogging()
 {
-	QFile file("log.txt"); // Create a file handle for the file named
-	QString line;
-	file.open(QIODevice::ReadOnly); // Open the file
+    QFile file("log.txt"); // Create a file handle for the file named
+    QString line;
+    file.open(QIODevice::ReadOnly); // Open the file
 
-	QTextStream stream( &file ); // Set the stream to read from myFile
-	logBrowser->clear();
-	while(!stream.atEnd()){
+    QTextStream stream(&file); // Set the stream to read from myFile
+    logBrowser->clear();
+    while (!stream.atEnd())
+    {
 
-		line = stream.readLine(); // this reads a line (QString) from the file
-		logBrowser->append(line);
-	}
+        line = stream.readLine(); // this reads a line (QString) from the file
+        logBrowser->append(line);
+    }
 }
 
-
-void ImageViewer::resizeEvent(QResizeEvent * event)
+void ImageViewer::resizeEvent(QResizeEvent *event)
 {
-	QMainWindow::resizeEvent(event);
-	centralwidget->setMinimumWidth(width());	
-    	centralwidget->setMinimumHeight(height());
-	centralwidget->setMaximumWidth(width());	
-    	centralwidget->setMaximumHeight(height());
- 	logBrowser->setMinimumWidth(width()-40);
-    	logBrowser->setMaximumWidth(width()-40);
+    QMainWindow::resizeEvent(event);
+    centralwidget->setMinimumWidth(width());
+    centralwidget->setMinimumHeight(height());
+    centralwidget->setMaximumWidth(width());
+    centralwidget->setMaximumHeight(height());
+    logBrowser->setMinimumWidth(width() - 40);
+    logBrowser->setMaximumWidth(width() - 40);
 }
 
 void ImageViewer::updateImageDisplay()
 {
-	imageLabel->setPixmap(QPixmap::fromImage(*image));
+    imageLabel->setPixmap(QPixmap::fromImage(*image));
 }
-
 
 void ImageViewer::generateMainGui()
 {
-	/* Tab widget */
-        tabWidget = new QTabWidget(this);
-	tabWidget->setObjectName(QStringLiteral("tabWidget"));
-	
+    /* Tab widget */
+    tabWidget = new QTabWidget(this);
+    tabWidget->setObjectName(QStringLiteral("tabWidget"));
 
+    /* Center widget */
+    centralwidget = new QWidget(this);
+    centralwidget->setObjectName(QStringLiteral("centralwidget"));
+    //centralwidget->setFixedSize(200,200);
+    //setCentralWidget(centralwidget);
 
-	/* Center widget */
-	centralwidget = new QWidget(this);
-	centralwidget->setObjectName(QStringLiteral("centralwidget"));
-	//centralwidget->setFixedSize(200,200);
-	//setCentralWidget(centralwidget);
+    imageLabel = new QLabel;
+    imageLabel->setBackgroundRole(QPalette::Base);
+    imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
+    imageLabel->setScaledContents(true);
 
-    	imageLabel = new QLabel;
- 	imageLabel->setBackgroundRole(QPalette::Base);
-    	imageLabel->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
-    	imageLabel->setScaledContents(true);
-	
+    /* Center widget */
+    scrollArea = new QScrollArea;
+    scrollArea->setBackgroundRole(QPalette::Dark);
+    scrollArea->setWidget(imageLabel);
 
-	/* Center widget */
-	scrollArea = new QScrollArea;
-   	scrollArea->setBackgroundRole(QPalette::Dark);
-    	scrollArea->setWidget(imageLabel);
-	
-	
-    	setCentralWidget(scrollArea);
+    setCentralWidget(scrollArea);
 
-	/* HBox layout */
-	QGridLayout* gLayout = new QGridLayout(centralwidget);
-	gLayout->setObjectName(QStringLiteral("hboxLayout"));
-	gLayout->addWidget(new QLabel(),1,1);
-	gLayout->setVerticalSpacing(50);
-	gLayout->addWidget(tabWidget,2,1);
-	gLayout->addWidget(scrollArea,2,2);
-	
-	logBrowser= new QTextEdit(this);
-	logBrowser->setMinimumHeight(100);
-	logBrowser->setMaximumHeight(200);
-	logBrowser->setMinimumWidth(width());
-	logBrowser->setMaximumWidth(width());
-	gLayout->addWidget(logBrowser,3,1,1,2);
-	gLayout->setVerticalSpacing(50);
+    /* HBox layout */
+    QGridLayout *gLayout = new QGridLayout(centralwidget);
+    gLayout->setObjectName(QStringLiteral("hboxLayout"));
+    gLayout->addWidget(new QLabel(), 1, 1);
+    gLayout->setVerticalSpacing(50);
+    gLayout->addWidget(tabWidget, 2, 1);
+    gLayout->addWidget(scrollArea, 2, 2);
+
+    logBrowser = new QTextEdit(this);
+    logBrowser->setMinimumHeight(100);
+    logBrowser->setMaximumHeight(200);
+    logBrowser->setMinimumWidth(width());
+    logBrowser->setMaximumWidth(width());
+    gLayout->addWidget(logBrowser, 3, 1, 1, 2);
+    gLayout->setVerticalSpacing(50);
 }
-
 
 bool ImageViewer::loadFile(const QString &fileName)
 {
-    if(image!=NULL)
+    if (image != NULL)
     {
-	delete image;
-	image=NULL;
+        delete image;
+        image = NULL;
+    }
+    if (original_image != NULL)
+    {
+        delete original_image;
+        original_image = NULL;
     }
 
     image = new QImage(fileName);
+    original_image = new QImage(fileName);
 
-	
-
-    if (image->isNull()) {
+    if (image->isNull())
+    {
         QMessageBox::information(this, QGuiApplication::applicationDisplayName(),
                                  tr("Cannot load %1.").arg(QDir::toNativeSeparators(fileName)));
         setWindowFilePath(QString());
@@ -255,10 +294,9 @@ bool ImageViewer::loadFile(const QString &fileName)
         imageLabel->adjustSize();
         return false;
     }
-    
+
     scaleFactor = 1.0;
 
-   
     updateImageDisplay();
 
     printAct->setEnabled(true);
@@ -269,13 +307,10 @@ bool ImageViewer::loadFile(const QString &fileName)
         imageLabel->adjustSize();
 
     setWindowFilePath(fileName);
-    logFile << "geladen: " << fileName.toStdString().c_str()  << std::endl;
+    logFile << "geladen: " << fileName.toStdString().c_str() << std::endl;
     renewLogging();
     return true;
 }
-
-
-
 
 void ImageViewer::open()
 {
@@ -290,7 +325,9 @@ void ImageViewer::open()
     dialog.setMimeTypeFilters(mimeTypeFilters);
     dialog.selectMimeTypeFilter("image/jpeg");
 
-    while (dialog.exec() == QDialog::Accepted && !loadFile(dialog.selectedFiles().first())) {}
+    while (dialog.exec() == QDialog::Accepted && !loadFile(dialog.selectedFiles().first()))
+    {
+    }
 }
 
 void ImageViewer::print()
@@ -298,7 +335,8 @@ void ImageViewer::print()
     Q_ASSERT(imageLabel->pixmap());
 #if !defined(QT_NO_PRINTER) && !defined(QT_NO_PRINTDIALOG)
     QPrintDialog dialog(&printer, this);
-    if (dialog.exec()) {
+    if (dialog.exec())
+    {
         QPainter painter(&printer);
         QRect rect = painter.viewport();
         QSize size = imageLabel->pixmap()->size();
@@ -330,7 +368,8 @@ void ImageViewer::fitToWindow()
 {
     bool fitToWindow = fitToWindowAct->isChecked();
     scrollArea->setWidgetResizable(fitToWindow);
-    if (!fitToWindow) {
+    if (!fitToWindow)
+    {
         normalSize();
     }
     updateActions();
@@ -339,18 +378,18 @@ void ImageViewer::fitToWindow()
 void ImageViewer::about()
 {
     QMessageBox::about(this, tr("About Image Viewer"),
-            tr("<p>The <b>Image Viewer</b> example shows how to combine QLabel "
-               "and QScrollArea to display an image. QLabel is typically used "
-               "for displaying a text, but it can also display an image. "
-               "QScrollArea provides a scrolling view around another widget. "
-               "If the child widget exceeds the size of the frame, QScrollArea "
-               "automatically provides scroll bars. </p><p>The example "
-               "demonstrates how QLabel's ability to scale its contents "
-               "(QLabel::scaledContents), and QScrollArea's ability to "
-               "automatically resize its contents "
-               "(QScrollArea::widgetResizable), can be used to implement "
-               "zooming and scaling features. </p><p>In addition the example "
-               "shows how to use QPainter to print an image.</p>"));
+                       tr("<p>The <b>Image Viewer</b> example shows how to combine QLabel "
+                          "and QScrollArea to display an image. QLabel is typically used "
+                          "for displaying a text, but it can also display an image. "
+                          "QScrollArea provides a scrolling view around another widget. "
+                          "If the child widget exceeds the size of the frame, QScrollArea "
+                          "automatically provides scroll bars. </p><p>The example "
+                          "demonstrates how QLabel's ability to scale its contents "
+                          "(QLabel::scaledContents), and QScrollArea's ability to "
+                          "automatically resize its contents "
+                          "(QScrollArea::widgetResizable), can be used to implement "
+                          "zooming and scaling features. </p><p>In addition the example "
+                          "shows how to use QPainter to print an image.</p>"));
 }
 
 void ImageViewer::createActions()
@@ -442,6 +481,5 @@ void ImageViewer::scaleImage(double factor)
 
 void ImageViewer::adjustScrollBar(QScrollBar *scrollBar, double factor)
 {
-    scrollBar->setValue(int(factor * scrollBar->value()
-                            + ((factor - 1) * scrollBar->pageStep()/2)));
+    scrollBar->setValue(int(factor * scrollBar->value() + ((factor - 1) * scrollBar->pageStep() / 2)));
 }

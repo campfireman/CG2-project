@@ -63,66 +63,57 @@ class ImageViewer : public QMainWindow
 {
     Q_OBJECT
 
- private:
+private:
+    // Beispiel für GUI Elemente
+    QWidget *m_option_panel1;
+    QVBoxLayout *m_option_layout1;
 
-     // Beispiel für GUI Elemente
-     QWidget*	m_option_panel1;
-     QVBoxLayout*    m_option_layout1;
+    QWidget *m_option_panel2;
+    QVBoxLayout *m_option_layout2;
 
-     QWidget*	m_option_panel2;
-     QVBoxLayout*    m_option_layout2;
+    QPushButton *button1;
+    QPushButton *cross_draw_button;
+    QSpinBox *spinbox1;
 
-     QPushButton* button1;
-     QPushButton* button2;
-     QSpinBox* spinbox1;
+    // hier können weitere GUI Objekte hin wie Buttons Slider etc.
 
-     // hier können weitere GUI Objekte hin wie Buttons Slider etc. 
+    // GUI global values
+    int cross_slider_value;
 
+private slots:
 
- private slots:
+    void applyExampleAlgorithm();
 
-     // Beispiel für einen Algorithmus
-     void applyExampleAlgorithm();
+    // hier können weitere als SLOTS definierte Funktionen hin, die auf Knopfdruck etc. aufgerufen werden.
+    void drawCross();
+    void crossSliderValueChanged(int value);
 
-     // hier können weitere als SLOTS definierte Funktionen hin, die auf Knopfdruck etc. aufgerufen werden.
-
-
-
-
-
-     void open();
-     void print();
-     void zoomIn();
-     void zoomOut();
-     void normalSize();
-     void fitToWindow();
-     void about();
-
-
-
-
-
+    void open();
+    void print();
+    void zoomIn();
+    void zoomOut();
+    void normalSize();
+    void fitToWindow();
+    void about();
 
 public:
-     ImageViewer();
-     bool loadFile(const QString &);
-     void updateImageDisplay();
+    ImageViewer();
+    bool loadFile(const QString &);
+    void updateImageDisplay();
+    bool imageIsLoaded();
 
 protected:
+    void resizeEvent(QResizeEvent *event);
 
-    void resizeEvent(QResizeEvent * event);
-
- private:
-
+private:
     // in diesen Beiden Methoden sind Änderungen nötig bzw. sie dienen als
     // Vorlage für eigene Methoden.
     void generateControlPanels();
 
-
     // Ab hier technische Details die nicht für das Verständnis notwendig sind.
     void startLogging();
-    void generateMainGui(); 
-    
+    void generateMainGui();
+
     void createActions();
     void createMenus();
     void updateActions();
@@ -130,13 +121,14 @@ protected:
     void adjustScrollBar(QScrollBar *scrollBar, double factor);
     void renewLogging();
 
-    QTabWidget* tabWidget;
-    QTextEdit* logBrowser;
-    QWidget* centralwidget;
-    QLabel* imageLabel;
-    QScrollArea* scrollArea;
+    QTabWidget *tabWidget;
+    QTextEdit *logBrowser;
+    QWidget *centralwidget;
+    QLabel *imageLabel;
+    QScrollArea *scrollArea;
     double scaleFactor;
-    QImage* image;
+    QImage *image;
+    QImage *original_image;
 
     std::fstream logFile;
 
