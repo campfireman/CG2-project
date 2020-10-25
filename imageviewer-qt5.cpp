@@ -40,7 +40,6 @@
 
 #include <Qt>
 #include <QtWidgets>
-#include <QColor>
 #include <QSlider>
 #include <QGroupBox>
 #include <QWidget>
@@ -72,6 +71,7 @@ ImageViewer::ImageViewer()
     createMenus();
 
     resize(QGuiApplication::primaryScreen()->availableSize() * 0.85);
+    QObject::connect(this, &ImageViewer::imageUpdated, this, &ImageViewer::imageChanged);
 }
 
 bool ImageViewer::imageIsLoaded()
@@ -79,17 +79,29 @@ bool ImageViewer::imageIsLoaded()
     return image != NULL && original_image != NULL;
 }
 
+/* SLOTS */
+
+void ImageViewer::imageChanged(QImage *image)
+{
+    // calculate variance
+    // calculate median
+    // generate histogram
+    updateImageDisplay();
+}
+
 void ImageViewer::applyExampleAlgorithm()
 {
-    if (image != NULL)
+    if (imageIsLoaded())
     {
-        for (int i = 0; i < std::min(image->width(), image->height()); i++)
+        for (int i = 0; i < image->width(); i++)
         {
-            // macht die Farbe schwarz, bitte recherchieren wie eine andere Farbe gesetzt wird ...
-            image->setPixel(i, i, 0);
+            for (int j = 0; j < image->height(); j++)
+            {
+                image->setPixelColor(i, j, rgbToGrayColor(image->pixelColor(i, j)));
+            }
         }
-        updateImageDisplay();
-        logFile << "example algorithm applied " << std::endl;
+        emit imageUpdated(image);
+        logFile << "transformed to grayscale" << std::endl;
         renewLogging();
     }
 }
@@ -119,7 +131,7 @@ void ImageViewer::drawCross()
                 image->setPixelColor(x_r, y_r, original_image->pixelColor(x_r, y_l));
             }
         }
-        updateImageDisplay();
+        emit imageUpdated(image);
         logFile << "drew red cross" << std::endl;
         renewLogging();
     }
@@ -128,8 +140,6 @@ void ImageViewer::drawCross()
 void ImageViewer::crossSliderValueChanged(int value)
 {
     cross_slider_value = value;
-    logFile << "slider value: " << value << std::endl;
-    renewLogging();
     drawCross();
 }
 
@@ -204,6 +214,19 @@ void ImageViewer::generateControlPanels()
     tabWidget->addTab(m_option_panel5, "5");
 
     tabWidget->show();
+}
+
+/* public */
+
+int ImageViewer::rgbToGray(QColor &color)
+{
+    return (int)(0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue());
+}
+
+QColor ImageViewer::rgbToGrayColor(QColor color)
+{
+    int value = rgbToGray(color);
+    return QColor(value, value, value);
 }
 
 /**************************************************************************************** 
@@ -309,7 +332,7 @@ bool ImageViewer::loadFile(const QString &fileName)
     }
 
     image = new QImage(fileName);
-    original_image = new QImage(fileName);
+    original_image = new QImage(image->copy());
 
     if (image->isNull())
     {
@@ -323,7 +346,7 @@ bool ImageViewer::loadFile(const QString &fileName)
 
     scaleFactor = 1.0;
 
-    updateImageDisplay();
+    emit imageUpdated(image);
 
     printAct->setEnabled(true);
     fitToWindowAct->setEnabled(true);

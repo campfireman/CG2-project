@@ -58,6 +58,7 @@ class QVBoxLayout;
 class QTabWidget;
 class QPushButton;
 class QSpinBox;
+class QColor;
 
 class ImageViewer : public QMainWindow
 {
@@ -86,6 +87,7 @@ private slots:
 
     // hier können weitere als SLOTS definierte Funktionen hin, die auf Knopfdruck etc. aufgerufen werden.
     void drawCross();
+    void imageChanged(QImage *image);
     void crossSliderValueChanged(int value);
 
     void open();
@@ -96,11 +98,17 @@ private slots:
     void fitToWindow();
     void about();
 
+signals:
+    void imageUpdated(QImage *image);
+
 public:
     ImageViewer();
     bool loadFile(const QString &);
     void updateImageDisplay();
     bool imageIsLoaded();
+
+    int rgbToGray(QColor &color);
+    QColor rgbToGrayColor(QColor color);
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -122,6 +130,7 @@ private:
     void renewLogging();
 
     QTabWidget *tabWidget;
+    QTabWidget *imageInfo;
     QTextEdit *logBrowser;
     QWidget *centralwidget;
     QLabel *imageLabel;
