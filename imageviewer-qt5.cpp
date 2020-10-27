@@ -144,6 +144,10 @@ void ImageViewer::brightnessSliderValueChanged(int value)
 {
     changeBrightness(value);
 }
+void ImageViewer::contrastSliderValueChanged(int value)
+{
+    changeContrast(value);
+}
 
 /* PUBLIC */
 
@@ -204,18 +208,35 @@ void ImageViewer::changeBrightness(int value)
 {
     if (imageIsLoaded())
     {
+        value = (int)((value / 100.0) * 255);
         iteratePixels([this, value](int i, int j) {
             std::tuple<int, int, int> color = rgbToYCrCb(originalImage->pixelColor(i, j));
             int intensity = std::get<0>(color) + value;
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
             image->setPixelColor(i, j, yCrCbToRgb(color));
         });
-        // emit imageUpdated(image);
-        // logFile << "added brightness of " << value << std::endl;
-        auto test = rgbToYCrCb(QColor(120, 10, 140));
-        logFile << std::get<0>(test) << std::get<1>(test) << std::get<2>(test) << std::endl;
-        auto test2 = rgbToGray(120, 10, 140);
-        logFile << test2 << "  " << 0.299 * 120 + 0.587 * 10 + 0.114 * 140 << std::endl;
+        emit imageUpdated(image);
+        logFile << "added brightness of " << value << std::endl;
+        // auto test = rgbToYCrCb(QColor(120, 10, 140));
+        // logFile << std::get<0>(test) << std::get<1>(test) << std::get<2>(test) << std::endl;
+        // auto test2 = yCrCbToRgb(test);
+        // logFile << test2.red() << test2.green() << test2.blue() << std::endl;
+        renewLogging();
+    }
+}
+void ImageViewer::changeContrast(int value)
+{
+    if (imageIsLoaded())
+    {
+        double factor = (value / 10.0) + 1;
+        iteratePixels([this, factor](int i, int j) {
+            std::tuple<int, int, int> color = rgbToYCrCb(originalImage->pixelColor(i, j));
+            int intensity = (int)(std::get<0>(color) * factor);
+            std::get<0>(color) = intensity > 255 ? 255 : intensity;
+            image->setPixelColor(i, j, yCrCbToRgb(color));
+        });
+        emit imageUpdated(image);
+        logFile << "changed contrast width factor of " << value << std::endl;
         renewLogging();
     }
 }
@@ -246,12 +267,23 @@ std::tuple<int, int, int> ImageViewer::rgbToYCrCb(std::tuple<int, int, int> rgb)
 QColor ImageViewer::yCrCbToRgb(std::tuple<int, int, int> value)
 {
     int y = std::get<0>(value);
-    int cr = std::get<1>(value) - 128;
-    int cb = std::get<2>(value) - 128;
+    int cr = std::get<1>(value);
+    int cb = std::get<2>(value);
+    double yanteil = 298.082 * (y - 16);
+
+    int r = (int)((1 / 256.0) * (yanteil + 408.583 * (cr - 128)));
+    int g = (int)((1 / 256.0) * (yanteil + (-100.291) * (cb - 128) + (-208.120) * (cr - 128)));
+    int b = (int)((1 / 256.0) * (yanteil + 516.411 * (cb - 128)));
+    r = r < 0 ? 0 : r;
+    r = r > 255 ? 255 : r;
+    g = g < 0 ? 0 : g;
+    g = g > 255 ? 255 : g;
+    b = b < 0 ? 0 : b;
+    b = b > 255 ? 255 : b;
     return QColor(
-        (int)(y - 0.000926745 * cb + 1.40169 * cr),
-        (int)(y - 0.343695 * cb - 0.714169 * cr),
-        (int)(y + 1.77216 * cb + 0.000990221 * cr));
+        r,
+        g,
+        b);
 }
 QColor ImageViewer::rgbToGrayColor(QColor color)
 {
@@ -337,8 +369,7 @@ void ImageViewer::generateControlPanels()
     quantizationLayout->addWidget(quantizationSlider);
 
     brightnessSlider = new QSlider(Qt::Horizontal);
-    brightnessSlider->setTickInterval(10);
-    brightnessSlider->setRange(0, 255);
+    brightnessSlider->setRange(1, 100);
     brightnessSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
     QObject::connect(brightnessSlider, SIGNAL(valueChanged(int)), this, SLOT(brightnessSliderValueChanged(int)));
 
@@ -346,12 +377,22 @@ void ImageViewer::generateControlPanels()
     brightnessLayout->addWidget(new QLabel("Brightness"));
     brightnessLayout->addWidget(brightnessSlider);
 
+    contrastSlider = new QSlider(Qt::Horizontal);
+    contrastSlider->setRange(1, 10);
+    contrastSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
+    QObject::connect(contrastSlider, SIGNAL(valueChanged(int)), this, SLOT(contrastSliderValueChanged(int)));
+
+    QVBoxLayout *contrastLayout = new QVBoxLayout();
+    contrastLayout->addWidget(new QLabel("Contrast"));
+    contrastLayout->addWidget(contrastSlider);
+
     stack = new QStackedLayout();
 
     m_option_layout2->addLayout(avg_info);
     m_option_layout2->addLayout(var_info);
     m_option_layout2->addLayout(quantizationLayout);
     m_option_layout2->addLayout(brightnessLayout);
+    m_option_layout2->addLayout(contrastLayout);
     m_option_layout2->addLayout(stack);
 
     tabWidget->addTab(m_option_panel2, "2");

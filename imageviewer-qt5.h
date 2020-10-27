@@ -55,6 +55,7 @@ private slots:
     void crossSliderValueChanged(int value);
     void quantizationSliderValueChanged(int value);
     void brightnessSliderValueChanged(int value);
+    void contrastSliderValueChanged(int value);
     void imageChanged(QImage *image);
 
     void open();
@@ -80,6 +81,7 @@ public:
     void quantizeImage(int value);
     void drawCross(int value);
     void changeBrightness(int value);
+    void changeContrast(int value);
     void iteratePixels(std::function<void(int, int)> func);
     std::tuple<int, int, int> rgbToYCrCb(std::tuple<int, int, int> rgb);
     std::tuple<int, int, int> rgbToYCrCb(QColor rgb);
