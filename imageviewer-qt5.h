@@ -7,10 +7,13 @@
 #endif
 
 #include "fstream"
-
+#include <functional>
+#include <QStackedLayout>
 #include <QtCharts>
 #include <QChart>
 #include <QBarSeries>
+#include <QSlider>
+#include <tuple>
 using namespace QtCharts;
 class QAction;
 class QLabel;
@@ -43,16 +46,16 @@ private:
     // hier können weitere GUI Objekte hin wie Buttons Slider etc.
 
     // GUI global values
-    int cross_slider_value;
 
 private slots:
 
     void applyExampleAlgorithm();
 
     // hier können weitere als SLOTS definierte Funktionen hin, die auf Knopfdruck etc. aufgerufen werden.
-    void drawCross();
-    void imageChanged(QImage *image);
     void crossSliderValueChanged(int value);
+    void quantizationSliderValueChanged(int value);
+    void brightnessSliderValueChanged(int value);
+    void imageChanged(QImage *image);
 
     void open();
     void print();
@@ -71,8 +74,16 @@ public:
     void updateImageDisplay();
     bool imageIsLoaded();
 
+    int rgbToGray(int red, int green, int blue);
     int rgbToGray(QColor color);
     QColor rgbToGrayColor(QColor color);
+    void quantizeImage(int value);
+    void drawCross(int value);
+    void changeBrightness(int value);
+    void iteratePixels(std::function<void(int, int)> func);
+    std::tuple<int, int, int> rgbToYCrCb(std::tuple<int, int, int> rgb);
+    std::tuple<int, int, int> rgbToYCrCb(QColor rgb);
+    QColor yCrCbToRgb(std::tuple<int, int, int> val);
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -81,6 +92,8 @@ private:
     // in diesen Beiden Methoden sind Änderungen nötig bzw. sie dienen als
     // Vorlage für eigene Methoden.
     void generateControlPanels();
+
+    void setDefaults();
 
     // Ab hier technische Details die nicht für das Verständnis notwendig sind.
     void startLogging();
@@ -98,15 +111,19 @@ private:
     QTextEdit *logBrowser;
     QWidget *centralwidget;
     QLabel *imageLabel;
+    QSlider *crossSlider;
     QLabel *varianceInfo;
     QLabel *averageInfo;
+    QSlider *quantizationSlider;
     QChart *histogramChart;
     QChartView *histogramChartView;
-    QBarSeries *histogramData;
+    QStackedLayout *stack;
+    QSlider *brightnessSlider;
+    QSlider *contrastSlider;
     QScrollArea *scrollArea;
     double scaleFactor;
     QImage *image;
-    QImage *original_image;
+    QImage *originalImage;
 
     std::fstream logFile;
 

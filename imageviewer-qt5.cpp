@@ -2,12 +2,10 @@
 
 #include <Qt>
 #include <QtWidgets>
-#include <QSlider>
 #include <QGroupBox>
 #include <QWidget>
 #include <QHBoxLayout>
 #include <QBarSet>
-
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
 #endif
@@ -16,15 +14,19 @@
 
 #include "imageviewer-qt5.h"
 
-#define CROSS_SLIDER_DEFAULT 49
+#define DEFAULT_CROSS_SLIDER 49
+#define DEFAULT_QUANTIZATION_SLIDER 8
+#define DEFAULT_CONTRAST_SLIDER 0
+#define DEFAULT_BRIGHTNESS_SLIDER 0
 #define GRAY_SPECTRUM 256
 
 ImageViewer::ImageViewer()
 {
 
     image = NULL;
-    original_image = NULL;
-    cross_slider_value = CROSS_SLIDER_DEFAULT;
+    originalImage = NULL;
+    histogramChart = NULL;
+    histogramChartView = NULL;
     resize(1600, 600);
 
     startLogging();
@@ -42,7 +44,7 @@ ImageViewer::ImageViewer()
 
 bool ImageViewer::imageIsLoaded()
 {
-    return image != NULL && original_image != NULL;
+    return image != NULL && originalImage != NULL;
 }
 
 /* SLOTS */
@@ -85,25 +87,32 @@ void ImageViewer::imageChanged(QImage *image)
     // display values
     averageInfo->setNum(avg);
     varianceInfo->setNum(var);
-    histogramData->clear();
-    histogramData->append(hist_set);
 
-    QBarSet *set0 = new QBarSet("Jane");
-    QBarSet *set1 = new QBarSet("John");
-    QBarSet *set2 = new QBarSet("Axel");
-    QBarSet *set3 = new QBarSet("Mary");
-    QBarSet *set4 = new QBarSet("Samantha");
+    QBarSeries *series = new QBarSeries();
+    series->append(hist_set);
 
-    *set0 << 1 << 2 << 3 << 4 << 5 << 6;
-    *set1 << 5 << 0 << 0 << 4 << 0 << 7;
-    *set2 << 3 << 5 << 8 << 13 << 8 << 5;
-    *set3 << 5 << 6 << 7 << 3 << 4 << 5;
-    *set4 << 9 << 7 << 5 << 3 << 1 << 2;
+    QChart *histogramChart = new QChart();
+    histogramChart->addSeries(series);
+    histogramChart->setTitle("Histogram");
+    histogramChart->setAnimationOptions(QChart::SeriesAnimations);
 
-    histogramData->append(set0);
-    histogramChart->removeSeries(histogramData);
-    histogramChart->addSeries(histogramData);
-    histogramChartView->repaint();
+    QValueAxis *axisX = new QValueAxis();
+    axisX->setRange(0.0, 255.0);
+    histogramChart->addAxis(axisX, Qt::AlignBottom);
+    series->attachAxis(axisX);
+
+    QValueAxis *axisY = new QValueAxis();
+    histogramChart->addAxis(axisY, Qt::AlignLeft);
+    series->attachAxis(axisY);
+
+    histogramChart->legend()->setVisible(false);
+    histogramChart->legend()->setAlignment(Qt::AlignBottom);
+
+    QChartView *histogramChartView = new QChartView(histogramChart);
+    histogramChartView->setRenderHint(QPainter::Antialiasing);
+
+    stack->addWidget(histogramChartView);
+    stack->setCurrentWidget(histogramChartView);
 
     updateImageDisplay();
 }
@@ -112,25 +121,38 @@ void ImageViewer::applyExampleAlgorithm()
 {
     if (imageIsLoaded())
     {
-        for (int i = 0; i < image->width(); i++)
-        {
-            for (int j = 0; j < image->height(); j++)
-            {
-                image->setPixelColor(i, j, rgbToGrayColor(image->pixelColor(i, j)));
-            }
-        }
+        iteratePixels([this](int i, int j) {
+            image->setPixelColor(i, j, rgbToGrayColor(image->pixelColor(i, j)));
+        });
         emit imageUpdated(image);
         logFile << "transformed to grayscale" << std::endl;
         renewLogging();
     }
 }
 
-void ImageViewer::drawCross()
+void ImageViewer::crossSliderValueChanged(int value)
+{
+    drawCross(value);
+}
+
+void ImageViewer::quantizationSliderValueChanged(int value)
+{
+    quantizeImage(value);
+}
+
+void ImageViewer::brightnessSliderValueChanged(int value)
+{
+    changeBrightness(value);
+}
+
+/* PUBLIC */
+
+void ImageViewer::drawCross(int value)
 {
     if (imageIsLoaded())
     {
         int size = std::min(image->width(), image->height());
-        int max_width = (int)(size * ((cross_slider_value + 1) / 100.0));
+        int max_width = (int)(size * ((value + 1) / 100.0));
         int offset = (int)((size - max_width) / 2.0);
         for (int i = 0; i < size; i++)
         {
@@ -146,8 +168,8 @@ void ImageViewer::drawCross()
             }
             else
             {
-                image->setPixelColor(x_l, y_l, original_image->pixelColor(x_l, y_l));
-                image->setPixelColor(x_r, y_r, original_image->pixelColor(x_r, y_l));
+                image->setPixelColor(x_l, y_l, originalImage->pixelColor(x_l, y_l));
+                image->setPixelColor(x_r, y_r, originalImage->pixelColor(x_r, y_l));
             }
         }
         emit imageUpdated(image);
@@ -156,10 +178,108 @@ void ImageViewer::drawCross()
     }
 }
 
-void ImageViewer::crossSliderValueChanged(int value)
+void ImageViewer::quantizeImage(int value)
 {
-    cross_slider_value = value;
-    drawCross();
+    if (imageIsLoaded())
+    {
+        int div = pow(2, (8 - value));
+        if (div > 0)
+        {
+            iteratePixels([this, div](int i, int j) {
+                QColor color = originalImage->pixelColor(i, j);
+                color.setRed((color.red() / div) * div);
+                color.setBlue((color.blue() / div) * div);
+                color.setGreen((color.green() / div) * div);
+                image->setPixelColor(i, j, color);
+            });
+        }
+        emit imageUpdated(image);
+        logFile << "quantized to " << value << "-bit" << std::endl;
+        logFile << div << std::endl;
+        renewLogging();
+    }
+}
+
+void ImageViewer::changeBrightness(int value)
+{
+    if (imageIsLoaded())
+    {
+        iteratePixels([this, value](int i, int j) {
+            std::tuple<int, int, int> color = rgbToYCrCb(originalImage->pixelColor(i, j));
+            int intensity = std::get<0>(color) + value;
+            std::get<0>(color) = intensity > 255 ? 255 : intensity;
+            image->setPixelColor(i, j, yCrCbToRgb(color));
+        });
+        // emit imageUpdated(image);
+        // logFile << "added brightness of " << value << std::endl;
+        auto test = rgbToYCrCb(QColor(120, 10, 140));
+        logFile << std::get<0>(test) << std::get<1>(test) << std::get<2>(test) << std::endl;
+        auto test2 = rgbToGray(120, 10, 140);
+        logFile << test2 << "  " << 0.299 * 120 + 0.587 * 10 + 0.114 * 140 << std::endl;
+        renewLogging();
+    }
+}
+
+int ImageViewer::rgbToGray(int red, int green, int blue)
+{
+    return (int)((16 + (1 / 256.0) * (65.738 * red + 129.057 * green + 25.064 * blue)));
+}
+int ImageViewer::rgbToGray(QColor color)
+{
+    return rgbToGray(color.red(), color.green(), color.blue());
+}
+
+std::tuple<int, int, int> ImageViewer::rgbToYCrCb(QColor rgb)
+{
+    return rgbToYCrCb(std::tuple<int, int, int>(rgb.red(), rgb.green(), rgb.blue()));
+}
+std::tuple<int, int, int> ImageViewer::rgbToYCrCb(std::tuple<int, int, int> rgb)
+{
+    int red = std::get<0>(rgb);
+    int green = std::get<1>(rgb);
+    int blue = std::get<2>(rgb);
+    return std::tuple<int, int, int>(
+        rgbToGray(red, green, blue),
+        128 + (int)((1 / 256.0) * (-37.945 * red + (-74.494) * green + 112.439 * blue)),
+        128 + (int)((1 / 256.0) * (112.439 * red + (-94.154) * green + (-18.285) * blue)));
+}
+QColor ImageViewer::yCrCbToRgb(std::tuple<int, int, int> value)
+{
+    int y = std::get<0>(value);
+    int cr = std::get<1>(value) - 128;
+    int cb = std::get<2>(value) - 128;
+    return QColor(
+        (int)(y - 0.000926745 * cb + 1.40169 * cr),
+        (int)(y - 0.343695 * cb - 0.714169 * cr),
+        (int)(y + 1.77216 * cb + 0.000990221 * cr));
+}
+QColor ImageViewer::rgbToGrayColor(QColor color)
+{
+    int value = rgbToGray(color.red(), color.green(), color.blue());
+    return QColor(value, value, value);
+}
+
+void ImageViewer::iteratePixels(std::function<void(int, int)> func)
+{
+    for (int i = 0; i < image->width(); i++)
+    {
+        for (int j = 0; j < image->height(); j++)
+        {
+            func(i, j);
+        }
+    }
+}
+
+/* PRIVATE */
+
+void ImageViewer::setDefaults()
+{
+    crossSlider->blockSignals(true);
+    crossSlider->setValue(DEFAULT_CROSS_SLIDER);
+    crossSlider->blockSignals(false);
+    quantizationSlider->blockSignals(true);
+    quantizationSlider->setValue(DEFAULT_QUANTIZATION_SLIDER);
+    quantizationSlider->blockSignals(false);
 }
 
 void ImageViewer::generateControlPanels()
@@ -177,18 +297,13 @@ void ImageViewer::generateControlPanels()
     QGroupBox *cross_group = new QGroupBox("Red cross");
     QVBoxLayout *cross_layout = new QVBoxLayout();
 
-    QLabel *cross_slider_label = new QLabel("Cross width");
-    QSlider *cross_slider = new QSlider(Qt::Horizontal);
-    cross_slider->setValue(CROSS_SLIDER_DEFAULT);
-    QObject::connect(cross_slider, SIGNAL(valueChanged(int)), this, SLOT(crossSliderValueChanged(int)));
+    QLabel *crossSliderLabel = new QLabel("Cross width");
+    crossSlider = new QSlider(Qt::Horizontal);
+    crossSlider->setValue(DEFAULT_CROSS_SLIDER);
+    QObject::connect(crossSlider, SIGNAL(valueChanged(int)), this, SLOT(crossSliderValueChanged(int)));
 
-    cross_draw_button = new QPushButton();
-    cross_draw_button->setText("Draw Cross");
-    QObject::connect(cross_draw_button, SIGNAL(clicked()), this, SLOT(drawCross()));
-
-    cross_layout->addWidget(cross_slider_label);
-    cross_layout->addWidget(cross_slider);
-    cross_layout->addWidget(cross_draw_button);
+    cross_layout->addWidget(crossSliderLabel);
+    cross_layout->addWidget(crossSlider);
     cross_group->setLayout(cross_layout);
 
     m_option_layout1->addWidget(button1);
@@ -203,25 +318,42 @@ void ImageViewer::generateControlPanels()
 
     QHBoxLayout *avg_info = new QHBoxLayout();
     averageInfo = new QLabel();
-    avg_info->addWidget(new QLabel("Durchschnittlicher Grauwert: "));
+    avg_info->addWidget(new QLabel("Average gray: "));
     avg_info->addWidget(averageInfo);
 
     QHBoxLayout *var_info = new QHBoxLayout();
     varianceInfo = new QLabel();
-    var_info->addWidget(new QLabel("Varianz: "));
+    var_info->addWidget(new QLabel("Variance: "));
     var_info->addWidget(varianceInfo);
 
-    QChart *histogramChart = new QChart();
-    histogramChart->setTitle("Simple barchart example");
-    histogramData = new QBarSeries();
-    histogramChart->addSeries(histogramData);
-    histogramChart->setAnimationOptions(QChart::SeriesAnimations);
-    histogramChartView = new QChartView(histogramChart);
-    histogramChartView->setRenderHint(QPainter::Antialiasing);
+    quantizationSlider = new QSlider(Qt::Horizontal);
+    quantizationSlider->setTickInterval(1);
+    quantizationSlider->setRange(1, 8);
+    quantizationSlider->setValue(DEFAULT_QUANTIZATION_SLIDER);
+    QObject::connect(quantizationSlider, SIGNAL(valueChanged(int)), this, SLOT(quantizationSliderValueChanged(int)));
+
+    QVBoxLayout *quantizationLayout = new QVBoxLayout();
+    quantizationLayout->addWidget(new QLabel("Quantization"));
+    quantizationLayout->addWidget(quantizationSlider);
+
+    brightnessSlider = new QSlider(Qt::Horizontal);
+    brightnessSlider->setTickInterval(10);
+    brightnessSlider->setRange(0, 255);
+    brightnessSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
+    QObject::connect(brightnessSlider, SIGNAL(valueChanged(int)), this, SLOT(brightnessSliderValueChanged(int)));
+
+    QVBoxLayout *brightnessLayout = new QVBoxLayout();
+    brightnessLayout->addWidget(new QLabel("Brightness"));
+    brightnessLayout->addWidget(brightnessSlider);
+
+    stack = new QStackedLayout();
 
     m_option_layout2->addLayout(avg_info);
     m_option_layout2->addLayout(var_info);
-    m_option_layout2->addWidget(histogramChartView);
+    m_option_layout2->addLayout(quantizationLayout);
+    m_option_layout2->addLayout(brightnessLayout);
+    m_option_layout2->addLayout(stack);
+
     tabWidget->addTab(m_option_panel2, "2");
 
     // ex3
@@ -249,19 +381,6 @@ void ImageViewer::generateControlPanels()
     tabWidget->addTab(m_option_panel5, "5");
 
     tabWidget->show();
-}
-
-/* public */
-
-int ImageViewer::rgbToGray(QColor color)
-{
-    return (int)(0.299 * color.red() + 0.587 * color.green() + 0.114 * color.blue());
-}
-
-QColor ImageViewer::rgbToGrayColor(QColor color)
-{
-    int value = rgbToGray(color);
-    return QColor(value, value, value);
 }
 
 /**************************************************************************************** 
@@ -360,14 +479,14 @@ bool ImageViewer::loadFile(const QString &fileName)
         delete image;
         image = NULL;
     }
-    if (original_image != NULL)
+    if (originalImage != NULL)
     {
-        delete original_image;
-        original_image = NULL;
+        delete originalImage;
+        originalImage = NULL;
     }
 
     image = new QImage(fileName);
-    original_image = new QImage(image->copy());
+    originalImage = new QImage(image->copy());
 
     if (image->isNull())
     {
@@ -382,6 +501,7 @@ bool ImageViewer::loadFile(const QString &fileName)
     scaleFactor = 1.0;
 
     emit imageUpdated(image);
+    setDefaults();
 
     printAct->setEnabled(true);
     fitToWindowAct->setEnabled(true);
