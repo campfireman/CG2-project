@@ -1,5 +1,6 @@
 #ifndef IMAGEVIEWER_H
 #define IMAGEVIEWER_H
+#define GRAY_SPECTRUM 256
 
 #include <QMainWindow>
 #ifndef QT_NO_PRINTER
@@ -56,6 +57,7 @@ private slots:
     void quantizationSliderValueChanged(int value);
     void brightnessSliderValueChanged(int value);
     void contrastSliderValueChanged(int value);
+    void robustContrastSliderValueChanged(int value);
     void imageChanged(QImage *image);
 
     void open();
@@ -82,10 +84,12 @@ public:
     void drawCross(int value);
     void changeBrightness(int value);
     void changeContrast(int value);
+    void changeRobustContrast(int value);
     void iteratePixels(std::function<void(int, int)> func);
-    std::tuple<int, int, int> rgbToYCrCb(std::tuple<int, int, int> rgb);
-    std::tuple<int, int, int> rgbToYCrCb(QColor rgb);
-    QColor yCrCbToRgb(std::tuple<int, int, int> val);
+    std::tuple<int, int, int> rgbToYCbCr(std::tuple<int, int, int> rgb);
+    std::tuple<int, int, int> rgbToYCbCr(QColor rgb);
+    QColor yCbCrToRgb(std::tuple<int, int, int> val);
+    void createHistogram(QImage *image, int *hist);
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -122,10 +126,12 @@ private:
     QStackedLayout *stack;
     QSlider *brightnessSlider;
     QSlider *contrastSlider;
+    QSlider *robustContrastSlider;
     QScrollArea *scrollArea;
     double scaleFactor;
     QImage *image;
     QImage *originalImage;
+    int o_hist[GRAY_SPECTRUM] = {0};
 
     std::fstream logFile;
 

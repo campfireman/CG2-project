@@ -18,7 +18,6 @@
 #define DEFAULT_QUANTIZATION_SLIDER 8
 #define DEFAULT_CONTRAST_SLIDER 0
 #define DEFAULT_BRIGHTNESS_SLIDER 0
-#define GRAY_SPECTRUM 256
 
 ImageViewer::ImageViewer()
 {
@@ -55,14 +54,7 @@ void ImageViewer::imageChanged(QImage *image)
 
     // create histogram
     int hist[GRAY_SPECTRUM] = {0};
-    for (int i = 0; i < image->width(); i++)
-    {
-        for (int j = 0; j < image->height(); j++)
-        {
-            int val = rgbToGray(image->pixelColor(i, j));
-            hist[val] += 1;
-        }
-    }
+    createHistogram(image, hist);
 
     // calculate average
     double avg = 0.0;
@@ -148,8 +140,24 @@ void ImageViewer::contrastSliderValueChanged(int value)
 {
     changeContrast(value);
 }
+void ImageViewer::robustContrastSliderValueChanged(int value)
+{
+    changeRobustContrast(value);
+}
 
 /* PUBLIC */
+
+void ImageViewer::createHistogram(QImage *image, int *hist)
+{
+    for (int i = 0; i < image->width(); i++)
+    {
+        for (int j = 0; j < image->height(); j++)
+        {
+            int val = rgbToGray(image->pixelColor(i, j));
+            hist[val] += 1;
+        }
+    }
+}
 
 void ImageViewer::drawCross(int value)
 {
@@ -210,17 +218,13 @@ void ImageViewer::changeBrightness(int value)
     {
         value = (int)((value / 100.0) * 255);
         iteratePixels([this, value](int i, int j) {
-            std::tuple<int, int, int> color = rgbToYCrCb(originalImage->pixelColor(i, j));
+            std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
             int intensity = std::get<0>(color) + value;
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
-            image->setPixelColor(i, j, yCrCbToRgb(color));
+            image->setPixelColor(i, j, yCbCrToRgb(color));
         });
         emit imageUpdated(image);
         logFile << "added brightness of " << value << std::endl;
-        // auto test = rgbToYCrCb(QColor(120, 10, 140));
-        // logFile << std::get<0>(test) << std::get<1>(test) << std::get<2>(test) << std::endl;
-        // auto test2 = yCrCbToRgb(test);
-        // logFile << test2.red() << test2.green() << test2.blue() << std::endl;
         renewLogging();
     }
 }
@@ -230,13 +234,69 @@ void ImageViewer::changeContrast(int value)
     {
         double factor = (value / 10.0) + 1;
         iteratePixels([this, factor](int i, int j) {
-            std::tuple<int, int, int> color = rgbToYCrCb(originalImage->pixelColor(i, j));
+            std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
             int intensity = (int)(std::get<0>(color) * factor);
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
-            image->setPixelColor(i, j, yCrCbToRgb(color));
+            image->setPixelColor(i, j, yCbCrToRgb(color));
         });
         emit imageUpdated(image);
-        logFile << "changed contrast width factor of " << value << std::endl;
+        logFile << "changed contrast with factor of " << factor << std::endl;
+        renewLogging();
+    }
+}
+
+void ImageViewer::changeRobustContrast(int value)
+{
+    if (imageIsLoaded())
+    {
+        double factor = (value / 100.0) / 2;
+        int MN = image->width() * image->height();
+        int n_a_low = MN * factor;
+        int n_a_high = MN * (1 - factor);
+        int a_low;
+        int a_high;
+        bool seenLow = false;
+        bool seenHigh = false;
+        int sum = 0;
+        for (int a = 0; a < GRAY_SPECTRUM; a++)
+        {
+            sum += o_hist[a];
+            if (sum >= n_a_low && !seenLow)
+            {
+                a_low = a;
+                seenLow = true;
+            }
+            if (sum >= n_a_high && !seenHigh)
+            {
+                a_high = a;
+                seenHigh = true;
+            }
+            if (seenLow && seenHigh)
+            {
+                break;
+            }
+        }
+        double ratio = (GRAY_SPECTRUM - 1) / (double)(a_high - a_low);
+        iteratePixels([this, a_low, a_high, ratio](int i, int j) {
+            std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
+            int intensity = std::get<0>(color);
+            if (intensity <= a_low)
+            {
+                intensity = 0;
+            }
+            else if (intensity >= a_high)
+            {
+                intensity = GRAY_SPECTRUM - 1;
+            }
+            else
+            {
+                intensity = (intensity - a_low) * ratio;
+            }
+            std::get<0>(color) = intensity;
+            image->setPixelColor(i, j, yCbCrToRgb(color));
+        });
+        emit imageUpdated(image);
+        logFile << "changed robust contrast with percentage of " << factor << std::endl;
         renewLogging();
     }
 }
@@ -250,11 +310,11 @@ int ImageViewer::rgbToGray(QColor color)
     return rgbToGray(color.red(), color.green(), color.blue());
 }
 
-std::tuple<int, int, int> ImageViewer::rgbToYCrCb(QColor rgb)
+std::tuple<int, int, int> ImageViewer::rgbToYCbCr(QColor rgb)
 {
-    return rgbToYCrCb(std::tuple<int, int, int>(rgb.red(), rgb.green(), rgb.blue()));
+    return rgbToYCbCr(std::tuple<int, int, int>(rgb.red(), rgb.green(), rgb.blue()));
 }
-std::tuple<int, int, int> ImageViewer::rgbToYCrCb(std::tuple<int, int, int> rgb)
+std::tuple<int, int, int> ImageViewer::rgbToYCbCr(std::tuple<int, int, int> rgb)
 {
     int red = std::get<0>(rgb);
     int green = std::get<1>(rgb);
@@ -264,16 +324,16 @@ std::tuple<int, int, int> ImageViewer::rgbToYCrCb(std::tuple<int, int, int> rgb)
         128 + (int)((1 / 256.0) * (-37.945 * red + (-74.494) * green + 112.439 * blue)),
         128 + (int)((1 / 256.0) * (112.439 * red + (-94.154) * green + (-18.285) * blue)));
 }
-QColor ImageViewer::yCrCbToRgb(std::tuple<int, int, int> value)
+QColor ImageViewer::yCbCrToRgb(std::tuple<int, int, int> value)
 {
     int y = std::get<0>(value);
-    int cr = std::get<1>(value);
-    int cb = std::get<2>(value);
-    double yanteil = 298.082 * (y - 16);
+    int cb = std::get<1>(value);
+    int cr = std::get<2>(value);
+    double yComponent = 298.082 * (y - 16);
 
-    int r = (int)((1 / 256.0) * (yanteil + 408.583 * (cr - 128)));
-    int g = (int)((1 / 256.0) * (yanteil + (-100.291) * (cb - 128) + (-208.120) * (cr - 128)));
-    int b = (int)((1 / 256.0) * (yanteil + 516.411 * (cb - 128)));
+    int r = (int)((1 / 256.0) * (yComponent + 408.583 * (cr - 128)));
+    int g = (int)((1 / 256.0) * (yComponent + (-100.291) * (cb - 128) + (-208.120) * (cr - 128)));
+    int b = (int)((1 / 256.0) * (yComponent + 516.411 * (cb - 128)));
     r = r < 0 ? 0 : r;
     r = r > 255 ? 255 : r;
     g = g < 0 ? 0 : g;
@@ -386,6 +446,15 @@ void ImageViewer::generateControlPanels()
     contrastLayout->addWidget(new QLabel("Contrast"));
     contrastLayout->addWidget(contrastSlider);
 
+    robustContrastSlider = new QSlider(Qt::Horizontal);
+    robustContrastSlider->setRange(1, 100);
+    robustContrastSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
+    QObject::connect(robustContrastSlider, SIGNAL(valueChanged(int)), this, SLOT(robustContrastSliderValueChanged(int)));
+
+    QVBoxLayout *robustContrastLayout = new QVBoxLayout();
+    robustContrastLayout->addWidget(new QLabel("Robust robustContrast"));
+    robustContrastLayout->addWidget(robustContrastSlider);
+
     stack = new QStackedLayout();
 
     m_option_layout2->addLayout(avg_info);
@@ -393,6 +462,7 @@ void ImageViewer::generateControlPanels()
     m_option_layout2->addLayout(quantizationLayout);
     m_option_layout2->addLayout(brightnessLayout);
     m_option_layout2->addLayout(contrastLayout);
+    m_option_layout2->addLayout(robustContrastLayout);
     m_option_layout2->addLayout(stack);
 
     tabWidget->addTab(m_option_panel2, "2");
@@ -542,6 +612,7 @@ bool ImageViewer::loadFile(const QString &fileName)
     scaleFactor = 1.0;
 
     emit imageUpdated(image);
+    createHistogram(originalImage, o_hist);
     setDefaults();
 
     printAct->setEnabled(true);
