@@ -11,13 +11,14 @@
 #endif
 #include <iostream>
 #include <cmath>
-
 #include "imageviewer-qt5.h"
 
 #define DEFAULT_CROSS_SLIDER 49
 #define DEFAULT_QUANTIZATION_SLIDER 8
 #define DEFAULT_CONTRAST_SLIDER 0
 #define DEFAULT_BRIGHTNESS_SLIDER 0
+#define DEFAULT_FILTER_SIZE 3
+#define MAX_FILTER_SIZE 12
 
 ImageViewer::ImageViewer()
 {
@@ -83,7 +84,7 @@ void ImageViewer::imageChanged(QImage *image)
     QBarSeries *series = new QBarSeries();
     series->append(hist_set);
 
-    QChart *histogramChart = new QChart();
+    histogramChart = new QChart();
     histogramChart->addSeries(series);
     histogramChart->setTitle("Histogram");
     histogramChart->setAnimationOptions(QChart::SeriesAnimations);
@@ -100,7 +101,7 @@ void ImageViewer::imageChanged(QImage *image)
     histogramChart->legend()->setVisible(false);
     histogramChart->legend()->setAlignment(Qt::AlignBottom);
 
-    QChartView *histogramChartView = new QChartView(histogramChart);
+    histogramChartView = new QChartView(histogramChart);
     histogramChartView->setRenderHint(QPainter::Antialiasing);
 
     stack->addWidget(histogramChartView);
@@ -143,6 +144,14 @@ void ImageViewer::contrastSliderValueChanged(int value)
 void ImageViewer::robustContrastSliderValueChanged(int value)
 {
     changeRobustContrast(value);
+}
+void ImageViewer::filterMChanged(int value)
+{
+    changeFilterTableHeight(value);
+}
+void ImageViewer::filterNChanged(int value)
+{
+    changeFilterTableWidth(value);
 }
 
 /* PUBLIC */
@@ -301,6 +310,16 @@ void ImageViewer::changeRobustContrast(int value)
     }
 }
 
+void ImageViewer::changeFilterTableWidth(int value)
+{
+    filterTable->setColumnCount(value);
+}
+
+void ImageViewer::changeFilterTableHeight(int value)
+{
+    filterTable->setRowCount(value);
+}
+
 int ImageViewer::rgbToGray(int red, int green, int blue)
 {
     return (int)((16 + (1 / 256.0) * (65.738 * red + 129.057 * green + 25.064 * blue)));
@@ -334,16 +353,11 @@ QColor ImageViewer::yCbCrToRgb(std::tuple<int, int, int> value)
     int r = (int)((1 / 256.0) * (yComponent + 408.583 * (cr - 128)));
     int g = (int)((1 / 256.0) * (yComponent + (-100.291) * (cb - 128) + (-208.120) * (cr - 128)));
     int b = (int)((1 / 256.0) * (yComponent + 516.411 * (cb - 128)));
-    r = r < 0 ? 0 : r;
-    r = r > 255 ? 255 : r;
-    g = g < 0 ? 0 : g;
-    g = g > 255 ? 255 : g;
-    b = b < 0 ? 0 : b;
-    b = b > 255 ? 255 : b;
+
     return QColor(
-        r,
-        g,
-        b);
+        clamp(r, 0, GRAY_SPECTRUM - 1),
+        clamp(g, 0, GRAY_SPECTRUM - 1),
+        clamp(b, 0, GRAY_SPECTRUM - 1));
 }
 QColor ImageViewer::rgbToGrayColor(QColor color)
 {
@@ -362,8 +376,14 @@ void ImageViewer::iteratePixels(std::function<void(int, int)> func)
     }
 }
 
-/* PRIVATE */
+int ImageViewer::clamp(int value, int min, int max)
+{
+    value = value < min ? min : value;
+    value = value > max ? max : value;
+    return value;
+}
 
+/* PRIVATE */
 void ImageViewer::setDefaults()
 {
     crossSlider->blockSignals(true);
@@ -373,7 +393,6 @@ void ImageViewer::setDefaults()
     quantizationSlider->setValue(DEFAULT_QUANTIZATION_SLIDER);
     quantizationSlider->blockSignals(false);
 }
-
 void ImageViewer::generateControlPanels()
 {
     // ex1
@@ -438,7 +457,7 @@ void ImageViewer::generateControlPanels()
     brightnessLayout->addWidget(brightnessSlider);
 
     contrastSlider = new QSlider(Qt::Horizontal);
-    contrastSlider->setRange(1, 10);
+    contrastSlider->setRange(0, 10);
     contrastSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
     QObject::connect(contrastSlider, SIGNAL(valueChanged(int)), this, SLOT(contrastSliderValueChanged(int)));
 
@@ -447,12 +466,12 @@ void ImageViewer::generateControlPanels()
     contrastLayout->addWidget(contrastSlider);
 
     robustContrastSlider = new QSlider(Qt::Horizontal);
-    robustContrastSlider->setRange(1, 100);
+    robustContrastSlider->setRange(0, 100);
     robustContrastSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
     QObject::connect(robustContrastSlider, SIGNAL(valueChanged(int)), this, SLOT(robustContrastSliderValueChanged(int)));
 
     QVBoxLayout *robustContrastLayout = new QVBoxLayout();
-    robustContrastLayout->addWidget(new QLabel("Robust robustContrast"));
+    robustContrastLayout->addWidget(new QLabel("Robust Contrast"));
     robustContrastLayout->addWidget(robustContrastSlider);
 
     stack = new QStackedLayout();
@@ -472,6 +491,32 @@ void ImageViewer::generateControlPanels()
     QWidget *m_option_panel3 = new QWidget();
     QVBoxLayout *m_option_layout3 = new QVBoxLayout();
     m_option_panel3->setLayout(m_option_layout3);
+
+    QHBoxLayout *filterMInfo = new QHBoxLayout();
+    filterM = new UnevenIntSpinBox();
+    filterM->setMinimum(1);
+    filterM->setMaximum(MAX_FILTER_SIZE);
+    filterM->setSingleStep(2);
+    filterM->setValue(DEFAULT_FILTER_SIZE);
+    filterMInfo->addWidget(new QLabel("Filter M Dimension: "));
+    filterMInfo->addWidget(filterM);
+    QObject::connect(filterM, SIGNAL(valueChanged(int)), this, SLOT(filterMChanged(int)));
+
+    QHBoxLayout *filterNInfo = new QHBoxLayout();
+    filterN = new UnevenIntSpinBox();
+    filterN->setMinimum(1);
+    filterN->setMaximum(MAX_FILTER_SIZE);
+    filterN->setSingleStep(2);
+    filterN->setValue(DEFAULT_FILTER_SIZE);
+    filterNInfo->addWidget(new QLabel("Filter N Dimension: "));
+    filterNInfo->addWidget(filterN);
+    QObject::connect(filterN, SIGNAL(valueChanged(int)), this, SLOT(filterNChanged(int)));
+
+    filterTable = new QTableWidget(DEFAULT_FILTER_SIZE, DEFAULT_FILTER_SIZE);
+
+    m_option_layout3->addLayout(filterMInfo);
+    m_option_layout3->addLayout(filterNInfo);
+    m_option_layout3->addWidget(filterTable);
 
     tabWidget->addTab(m_option_panel3, "3");
 
