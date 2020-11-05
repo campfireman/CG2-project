@@ -35,22 +35,6 @@ class ImageViewer : public QMainWindow
 {
     Q_OBJECT
 
-private:
-    // Beispiel für GUI Elemente
-    QWidget *m_option_panel1;
-    QVBoxLayout *m_option_layout1;
-
-    QWidget *m_option_panel2;
-    QVBoxLayout *m_option_layout2;
-
-    QPushButton *button1;
-    QPushButton *cross_draw_button;
-    QSpinBox *spinbox1;
-
-    // hier können weitere GUI Objekte hin wie Buttons Slider etc.
-
-    // GUI global values
-
 private slots:
 
     void applyExampleAlgorithm();
@@ -64,6 +48,10 @@ private slots:
     void imageChanged(QImage *image);
     void filterMChanged(int value);
     void filterNChanged(int value);
+    void borderStrategyChangedPad();
+    void borderStrategyChangedConstant();
+    void borderStrategyChangedMirror();
+    void applyFilterClicked();
 
     void open();
     void print();
@@ -77,15 +65,27 @@ signals:
     void imageUpdated(QImage *image);
 
 public:
+    // original
     ImageViewer();
     bool loadFile(const QString &);
     void updateImageDisplay();
     bool imageIsLoaded();
 
+    // setters
+    void setBorderStrategy(std::function<QColor(int, int, QImage *)> strategy);
+
+    // helpers
     int rgbToGray(int red, int green, int blue);
     int rgbToGray(QColor color);
     QColor rgbToGrayColor(QColor color);
+    void iterateRect(int width, int height, std::function<void(int, int)> func);
+    void iteratePixels(std::function<void(int, int)> func);
+    std::tuple<int, int, int> rgbToYCbCr(std::tuple<int, int, int> rgb);
+    std::tuple<int, int, int> rgbToYCbCr(QColor rgb);
+    QColor yCbCrToRgb(std::tuple<int, int, int> val);
+    int clamp(int value, int min, int max);
 
+    // actions
     void quantizeImage(int value);
     void drawCross(int value);
     void changeBrightness(int value);
@@ -93,13 +93,9 @@ public:
     void changeRobustContrast(int value);
     void changeFilterTableWidth(int value);
     void changeFilterTableHeight(int value);
+    void setFilterTableWidgets();
+    void applyFilter();
     void createHistogram(QImage *image, int *hist);
-
-    void iteratePixels(std::function<void(int, int)> func);
-    std::tuple<int, int, int> rgbToYCbCr(std::tuple<int, int, int> rgb);
-    std::tuple<int, int, int> rgbToYCbCr(QColor rgb);
-    QColor yCbCrToRgb(std::tuple<int, int, int> val);
-    int clamp(int value, int min, int max);
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -110,6 +106,10 @@ private:
     void generateControlPanels();
 
     void setDefaults();
+    QColor getFilterPixel(int i, int j, QImage *image);
+    static QColor borderPad(int i, int j, QImage *image);
+    static QColor borderConstant(int i, int j, QImage *image);
+    static QColor borderMirror(int i, int j, QImage *image);
 
     // Ab hier technische Details die nicht für das Verständnis notwendig sind.
     void startLogging();
@@ -130,6 +130,15 @@ private:
     QScrollArea *scrollArea;
     double scaleFactor;
     QImage *image;
+    QWidget *m_option_panel1;
+    QVBoxLayout *m_option_layout1;
+
+    QWidget *m_option_panel2;
+    QVBoxLayout *m_option_layout2;
+
+    QPushButton *button1;
+    QPushButton *cross_draw_button;
+    QSpinBox *spinbox1;
 
     // custom
     QImage *originalImage;
@@ -148,6 +157,8 @@ private:
     UnevenIntSpinBox *filterN;
     QTableWidget *filterTable;
     std::vector<std::vector<int>> *filter;
+    QPushButton *applyFilterButton;
+    std::function<QColor(int, int, QImage *)> borderStrategy;
 
     std::fstream logFile;
 

@@ -18,6 +18,12 @@
 #define DEFAULT_CONTRAST_SLIDER 0
 #define DEFAULT_BRIGHTNESS_SLIDER 0
 #define DEFAULT_FILTER_SIZE 3
+#define DEFAULT_FILTER_INPUT 1
+#define DEFAULT_SIGMA_INPUT 1
+#define MIN_FILTER_INPUT 1
+#define MIN_SIGMA_INPUT 1
+#define MAX_FILTER_INPUT 100
+#define MAX_SIGMA_INPUT 5
 #define MAX_FILTER_SIZE 12
 
 ImageViewer::ImageViewer()
@@ -47,7 +53,9 @@ bool ImageViewer::imageIsLoaded()
     return image != NULL && originalImage != NULL;
 }
 
-/* SLOTS */
+/* 
+ * SLOTS
+ */
 
 void ImageViewer::imageChanged(QImage *image)
 {
@@ -153,8 +161,34 @@ void ImageViewer::filterNChanged(int value)
 {
     changeFilterTableWidth(value);
 }
+void ImageViewer::borderStrategyChangedPad()
+{
+    setBorderStrategy(borderPad);
+}
+void ImageViewer::borderStrategyChangedConstant()
+{
+    setBorderStrategy(borderConstant);
+}
+void ImageViewer::borderStrategyChangedMirror()
+{
+    setBorderStrategy(borderMirror);
+}
+
+void ImageViewer::applyFilterClicked()
+{
+    applyFilter();
+}
 
 /* PUBLIC */
+
+// setters
+
+void ImageViewer::setBorderStrategy(std::function<QColor(int, int, QImage *)> strategy)
+{
+    borderStrategy = strategy;
+}
+
+// actions
 
 void ImageViewer::createHistogram(QImage *image, int *hist)
 {
@@ -313,11 +347,76 @@ void ImageViewer::changeRobustContrast(int value)
 void ImageViewer::changeFilterTableWidth(int value)
 {
     filterTable->setColumnCount(value);
+    setFilterTableWidgets();
 }
 
 void ImageViewer::changeFilterTableHeight(int value)
 {
     filterTable->setRowCount(value);
+    setFilterTableWidgets();
+}
+
+void ImageViewer::setFilterTableWidgets()
+{
+    iterateRect(filterTable->rowCount(), filterTable->columnCount(), [this](int i, int j) {
+        QWidget *cellContent = filterTable->cellWidget(i, j);
+        if (cellContent == NULL)
+        {
+            QSpinBox *widget = new QSpinBox();
+            widget->setValue(DEFAULT_FILTER_INPUT);
+            widget->setMinimum(MIN_FILTER_INPUT);
+            widget->setMaximum(MAX_FILTER_INPUT);
+            filterTable->setCellWidget(i, j, widget);
+        }
+    });
+}
+QColor ImageViewer::borderPad(int i, int j, QImage *image)
+{
+    return image->pixelColor(i, j);
+}
+QColor ImageViewer::borderConstant(int i, int j, QImage *image)
+{
+    return image->pixelColor(i, j);
+}
+QColor ImageViewer::borderMirror(int i, int j, QImage *image)
+{
+    return image->pixelColor(i, j);
+}
+QColor ImageViewer::getFilterPixel(int i, int j, QImage *image)
+{
+    if (i < 0 || j < 0 || i > image->width() - 1 || j > image->height() - 1)
+    {
+        return borderStrategy(i, j, image);
+    }
+    return image->pixelColor(i, j);
+}
+
+void ImageViewer::applyFilter()
+{
+    auto filter = new std::vector<std::vector<int>>(filterTable->rowCount(), std::vector<int>(filterTable->columnCount(), 0));
+    iterateRect(filterTable->rowCount(), filterTable->columnCount(), [this, filter](int i, int j) {
+        QWidget *cellContent = filterTable->cellWidget(i, j);
+        if (cellContent != NULL)
+        {
+            QSpinBox *widget = dynamic_cast<QSpinBox *>(cellContent);
+            if (widget != NULL)
+            {
+                filter->at(i)[j] = widget->value();
+            }
+        }
+    });
+    int n = 0;
+    iterateRect(filter->size(), filter->at(0).size(), [this, filter, &n](int i, int j) {
+        n += filter->at(i)[j];
+    });
+    iteratePixels([this, n](int i, int j) {
+        int value = 0;
+        iterateRect(filter->size(), filter->at(0).size(), [this, &value](int u, int v) {
+            auto yCbCr = rgbToYCbCr(getFilterPixel(u, v, orignal_image));
+            value += filter->at(i)[j] * std::get<0>(yCbCr);
+        });
+        value /= n;
+    });
 }
 
 int ImageViewer::rgbToGray(int red, int green, int blue)
@@ -365,21 +464,32 @@ QColor ImageViewer::rgbToGrayColor(QColor color)
     return QColor(value, value, value);
 }
 
-void ImageViewer::iteratePixels(std::function<void(int, int)> func)
+void ImageViewer::iterateRect(int width, int height, std::function<void(int, int)> func)
 {
-    for (int i = 0; i < image->width(); i++)
+    for (int i = 0; i < width; i++)
     {
-        for (int j = 0; j < image->height(); j++)
+        for (int j = 0; j < height; j++)
         {
             func(i, j);
         }
     }
 }
 
+void ImageViewer::iteratePixels(std::function<void(int, int)> func)
+{
+    iterateRect(image->width(), image->height(), func);
+}
+
 int ImageViewer::clamp(int value, int min, int max)
 {
-    value = value < min ? min : value;
-    value = value > max ? max : value;
+    if (value < min)
+    {
+        return min;
+    }
+    if (value > max)
+    {
+        return max;
+    }
     return value;
 }
 
@@ -395,7 +505,9 @@ void ImageViewer::setDefaults()
 }
 void ImageViewer::generateControlPanels()
 {
-    // ex1
+    /*
+     * ex 1
+     */
 
     m_option_panel1 = new QWidget();
     m_option_layout1 = new QVBoxLayout();
@@ -421,7 +533,9 @@ void ImageViewer::generateControlPanels()
     m_option_layout1->addWidget(cross_group);
     tabWidget->addTab(m_option_panel1, "1");
 
-    // ex2
+    /*
+     * ex 2
+     */
 
     m_option_panel2 = new QWidget();
     m_option_layout2 = new QVBoxLayout();
@@ -486,11 +600,34 @@ void ImageViewer::generateControlPanels()
 
     tabWidget->addTab(m_option_panel2, "2");
 
-    // ex3
+    /*
+     * ex 3
+     */
 
     QWidget *m_option_panel3 = new QWidget();
     QVBoxLayout *m_option_layout3 = new QVBoxLayout();
     m_option_panel3->setLayout(m_option_layout3);
+
+    // border strategy
+
+    QGroupBox *borderStrategyGroup = new QGroupBox(tr("Border Strategy"));
+    QVBoxLayout *borderStrategyLayout = new QVBoxLayout;
+
+    QRadioButton *radio1 = new QRadioButton(tr("Zero Padding"));
+    QRadioButton *radio2 = new QRadioButton(tr("Constant Border"));
+    QRadioButton *radio3 = new QRadioButton(tr("Mirrored Border"));
+    radio1->setChecked(true);
+
+    borderStrategyLayout->addWidget(radio1);
+    borderStrategyLayout->addWidget(radio2);
+    borderStrategyLayout->addWidget(radio3);
+    borderStrategyLayout->addStretch(1);
+    borderStrategyGroup->setLayout(borderStrategyLayout);
+
+    // normal Filter
+
+    QGroupBox *filterGroup = new QGroupBox(tr("Normal Filter"));
+    QVBoxLayout *filterLayout = new QVBoxLayout;
 
     QHBoxLayout *filterMInfo = new QHBoxLayout();
     filterM = new UnevenIntSpinBox();
@@ -513,14 +650,48 @@ void ImageViewer::generateControlPanels()
     QObject::connect(filterN, SIGNAL(valueChanged(int)), this, SLOT(filterNChanged(int)));
 
     filterTable = new QTableWidget(DEFAULT_FILTER_SIZE, DEFAULT_FILTER_SIZE);
+    setFilterTableWidgets();
 
-    m_option_layout3->addLayout(filterMInfo);
-    m_option_layout3->addLayout(filterNInfo);
-    m_option_layout3->addWidget(filterTable);
+    applyFilterButton = new QPushButton("Apply filter");
+    QObject::connect(applyFilterButton, SIGNAL(clicked()), SLOT(applyFilterClicked()));
+
+    filterLayout->addLayout(filterMInfo);
+    filterLayout->addLayout(filterNInfo);
+    filterLayout->addWidget(filterTable);
+    filterLayout->addWidget(applyFilterButton);
+    filterGroup->setLayout(filterLayout);
+
+    // gaussian filter
+
+    QGroupBox *gaussianFilterGroup = new QGroupBox(tr("Gaussian Filter"));
+    QVBoxLayout *gaussianFilterLayout = new QVBoxLayout;
+
+    QHBoxLayout *sigmaLayout = new QHBoxLayout();
+    QSpinBox *sigmaSpinBox = new QSpinBox();
+    sigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
+    sigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
+    sigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
+    sigmaLayout->addWidget(new QLabel("Sigma: "));
+    sigmaLayout->addWidget(sigmaSpinBox);
+
+    QPushButton *applyGaussianFilterButton = new QPushButton("Apply gaussian filter");
+    QObject::connect(applyGaussianFilterButton, SIGNAL(clicked()), SLOT(applyFilterClicked()));
+
+    gaussianFilterLayout->addLayout(sigmaLayout);
+    gaussianFilterLayout->addWidget(applyGaussianFilterButton);
+    gaussianFilterGroup->setLayout(gaussianFilterLayout);
+
+    // add widgets
+
+    m_option_layout3->addWidget(borderStrategyGroup);
+    m_option_layout3->addWidget(filterGroup);
+    m_option_layout3->addWidget(gaussianFilterGroup);
 
     tabWidget->addTab(m_option_panel3, "3");
 
-    // ex4
+    /*
+     * ex 4
+     */
 
     QWidget *m_option_panel4 = new QWidget();
     QVBoxLayout *m_option_layout4 = new QVBoxLayout();
@@ -528,7 +699,9 @@ void ImageViewer::generateControlPanels()
 
     tabWidget->addTab(m_option_panel4, "4");
 
-    // ex5
+    /*
+     * ex 5
+     */
 
     QWidget *m_option_panel5 = new QWidget();
     QVBoxLayout *m_option_layout5 = new QVBoxLayout();
