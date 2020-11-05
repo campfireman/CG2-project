@@ -24,7 +24,7 @@
 #define MIN_SIGMA_INPUT 1
 #define MAX_FILTER_INPUT 100
 #define MAX_SIGMA_INPUT 5
-#define MAX_FILTER_SIZE 12
+#define MAX_FILTER_SIZE 13
 
 ImageViewer::ImageViewer()
 {
@@ -33,6 +33,7 @@ ImageViewer::ImageViewer()
     originalImage = NULL;
     histogramChart = NULL;
     histogramChartView = NULL;
+    setBorderStrategy(borderPad);
     resize(1600, 600);
 
     startLogging();
@@ -370,25 +371,59 @@ void ImageViewer::setFilterTableWidgets()
         }
     });
 }
-QColor ImageViewer::borderPad(int i, int j, QImage *image)
+QColor ImageViewer::borderPad(int x, int y, QImage *image)
 {
-    return image->pixelColor(i, j);
+    return QColor(0, 0, 0);
 }
-QColor ImageViewer::borderConstant(int i, int j, QImage *image)
+QColor ImageViewer::borderConstant(int x, int y, QImage *image)
 {
-    return image->pixelColor(i, j);
-}
-QColor ImageViewer::borderMirror(int i, int j, QImage *image)
-{
-    return image->pixelColor(i, j);
-}
-QColor ImageViewer::getFilterPixel(int i, int j, QImage *image)
-{
-    if (i < 0 || j < 0 || i > image->width() - 1 || j > image->height() - 1)
+    if (x > image->width() - 1)
     {
-        return borderStrategy(i, j, image);
+        x = image->width() - 1;
     }
-    return image->pixelColor(i, j);
+    else if (x < 0)
+    {
+        x = 0;
+    }
+    if (y > image->height() - 1)
+    {
+        y = image->height() - 1;
+    }
+    else if (y < 0)
+    {
+        y = 0;
+    }
+    return image->pixelColor(x, y);
+}
+QColor ImageViewer::borderMirror(int x, int y, QImage *image)
+{
+    if (x > image->width() - 1)
+    {
+        int dist = x - image->width();
+        x = image->width() - 1 - dist;
+    }
+    else if (x < 0)
+    {
+        x = -x;
+    }
+    if (y > image->height() - 1)
+    {
+        int dist = y - image->height();
+        y = image->height() - 1 - dist;
+    }
+    else if (y < 0)
+    {
+        y = -y;
+    }
+    return image->pixelColor(x, y);
+}
+QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
+{
+    if (x < 0 || y < 0 || x > image->width() - 1 || y > image->height() - 1)
+    {
+        return borderStrategy(x, y, image);
+    }
+    return image->pixelColor(x, y);
 }
 
 void ImageViewer::applyFilter()
@@ -409,14 +444,26 @@ void ImageViewer::applyFilter()
     iterateRect(filter->size(), filter->at(0).size(), [this, filter, &n](int i, int j) {
         n += filter->at(i)[j];
     });
-    iteratePixels([this, n](int i, int j) {
+    int x_h = (int)(filter->size()) / 2;
+    int y_h = (int)(filter->at(0).size()) / 2;
+    iteratePixels([this, n, x_h, y_h, filter](int i, int j) {
         int value = 0;
-        iterateRect(filter->size(), filter->at(0).size(), [this, &value](int u, int v) {
-            auto yCbCr = rgbToYCbCr(getFilterPixel(u, v, orignal_image));
-            value += filter->at(i)[j] * std::get<0>(yCbCr);
-        });
+        for (int u = 0; u < filter->at(0).size(); u++)
+        {
+            for (int v = 0; v < filter->size(); v++)
+            {
+                auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
+                value += filter->at(v)[u] * std::get<0>(yCbCr);
+            }
+        }
         value /= n;
+        auto old_color = rgbToYCbCr(image->pixelColor(i, j));
+        std::get<0>(old_color) = value;
+        image->setPixelColor(i, j, yCbCrToRgb(old_color));
     });
+    emit imageUpdated(image);
+    logFile << "applied normal filter " << std::endl;
+    renewLogging();
 }
 
 int ImageViewer::rgbToGray(int red, int green, int blue)
@@ -613,16 +660,20 @@ void ImageViewer::generateControlPanels()
     QGroupBox *borderStrategyGroup = new QGroupBox(tr("Border Strategy"));
     QVBoxLayout *borderStrategyLayout = new QVBoxLayout;
 
-    QRadioButton *radio1 = new QRadioButton(tr("Zero Padding"));
-    QRadioButton *radio2 = new QRadioButton(tr("Constant Border"));
-    QRadioButton *radio3 = new QRadioButton(tr("Mirrored Border"));
-    radio1->setChecked(true);
+    QRadioButton *pad = new QRadioButton(tr("Zero Padding"));
+    QRadioButton *constant = new QRadioButton(tr("Constant Border"));
+    QRadioButton *mirror = new QRadioButton(tr("Mirrored Border"));
 
-    borderStrategyLayout->addWidget(radio1);
-    borderStrategyLayout->addWidget(radio2);
-    borderStrategyLayout->addWidget(radio3);
+    borderStrategyLayout->addWidget(pad);
+    borderStrategyLayout->addWidget(constant);
+    borderStrategyLayout->addWidget(mirror);
     borderStrategyLayout->addStretch(1);
     borderStrategyGroup->setLayout(borderStrategyLayout);
+
+    QObject::connect(pad, SIGNAL(clicked()), SLOT(borderStrategyChangedPad()));
+    QObject::connect(constant, SIGNAL(clicked()), SLOT(borderStrategyChangedConstant()));
+    QObject::connect(mirror, SIGNAL(clicked()), SLOT(borderStrategyChangedMirror()));
+    pad->setChecked(true);
 
     // normal Filter
 
