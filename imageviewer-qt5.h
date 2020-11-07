@@ -6,6 +6,18 @@
 #ifndef QT_NO_PRINTER
 #include <QPrinter>
 #endif
+
+// eigen library for matrix SVD
+#pragma GCC diagnostic push
+// -Wall didn't work for some reason
+#pragma GCC diagnostic ignored "-Wmisleading-indentation"
+#pragma GCC diagnostic ignored "-Wint-in-bool-context"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#include "utils/Eigen/SVD"
+#include "utils/Eigen/Core"
+#pragma GCC diagnostic pop
+using namespace Eigen;
+
 #include "utils/UnevenIntSpinBox.h"
 #include "fstream"
 #include <functional>
@@ -94,7 +106,7 @@ public:
     void changeFilterTableWidth(int value);
     void changeFilterTableHeight(int value);
     void setFilterTableWidgets();
-    void applyFilter();
+    void applyFilter(Eigen::MatrixXd filter);
     void createHistogram(QImage *image, int *hist);
 
 protected:

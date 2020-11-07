@@ -13,6 +13,7 @@
 #include <cmath>
 #include "imageviewer-qt5.h"
 
+using namespace std;
 #define DEFAULT_CROSS_SLIDER 49
 #define DEFAULT_QUANTIZATION_SLIDER 8
 #define DEFAULT_CONTRAST_SLIDER 0
@@ -28,7 +29,6 @@
 
 ImageViewer::ImageViewer()
 {
-
     image = NULL;
     originalImage = NULL;
     histogramChart = NULL;
@@ -177,7 +177,20 @@ void ImageViewer::borderStrategyChangedMirror()
 
 void ImageViewer::applyFilterClicked()
 {
-    applyFilter();
+
+    Eigen::MatrixXd filter = MatrixXd::Constant(filterTable->rowCount(), filterTable->columnCount(), 0);
+    iterateRect(filterTable->rowCount(), filterTable->columnCount(), [this, &filter](int i, int j) {
+        QWidget *cellContent = filterTable->cellWidget(i, j);
+        if (cellContent != NULL)
+        {
+            QSpinBox *widget = dynamic_cast<QSpinBox *>(cellContent);
+            if (widget != NULL)
+            {
+                filter(i, j) = widget->value();
+            }
+        }
+    });
+    applyFilter(filter);
 }
 
 /* PUBLIC */
@@ -426,44 +439,58 @@ QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
     return image->pixelColor(x, y);
 }
 
-void ImageViewer::applyFilter()
+void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 {
-    auto filter = new std::vector<std::vector<int>>(filterTable->rowCount(), std::vector<int>(filterTable->columnCount(), 0));
-    iterateRect(filterTable->rowCount(), filterTable->columnCount(), [this, filter](int i, int j) {
-        QWidget *cellContent = filterTable->cellWidget(i, j);
-        if (cellContent != NULL)
+
+    if (imageIsLoaded())
+    {
+        logFile << "Applying this filter:" << endl
+                << filter << endl;
+
+        // check if separable
+        Eigen::JacobiSVD<Eigen::MatrixXd> svd(filter, Eigen::ComputeThinU | Eigen::ComputeThinV);
+        logFile << "Its singular values are:" << endl
+                << svd.singularValues() << endl;
+        bool isSeparable = svd.rank() == 1;
+
+        if (isSeparable)
         {
-            QSpinBox *widget = dynamic_cast<QSpinBox *>(cellContent);
-            if (widget != NULL)
-            {
-                filter->at(i)[j] = widget->value();
-            }
+            logFile << "is separable" << std::endl;
         }
-    });
-    int n = 0;
-    iterateRect(filter->size(), filter->at(0).size(), [this, filter, &n](int i, int j) {
-        n += filter->at(i)[j];
-    });
-    int x_h = (int)(filter->size()) / 2;
-    int y_h = (int)(filter->at(0).size()) / 2;
-    iteratePixels([this, n, x_h, y_h, filter](int i, int j) {
-        int value = 0;
-        for (int u = 0; u < filter->at(0).size(); u++)
-        {
-            for (int v = 0; v < filter->size(); v++)
+        logFile << "Its rank is: " << endl
+                << svd.rank() << endl;
+        logFile << "Its left singular vectors are the columns of the thin U matrix:" << endl
+                << svd.matrixU() << endl;
+        logFile << "Its right singular vectors are the columns of the thin V matrix:" << endl
+                << svd.matrixV() << endl;
+        logFile << svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]) << endl;
+        logFile << svd.matrixV()(Eigen::all, 0).transpose() * sqrt(svd.singularValues()[0]) << endl;
+
+        double sum = 0.0;
+        iterateRect(filter.rows(), filter.cols(), [this, &filter, &sum](int i, int j) {
+            sum += filter(i, j);
+        });
+        int n = (int)(sum + 0.5);
+        int x_h = (int)(filter.rows()) / 2;
+        int y_h = (int)(filter.cols()) / 2;
+        iteratePixels([this, n, x_h, y_h, &filter](int i, int j) {
+            int value = 0;
+            for (int u = 0; u < filter.cols(); u++)
             {
-                auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
-                value += filter->at(v)[u] * std::get<0>(yCbCr);
+                for (int v = 0; v < filter.rows(); v++)
+                {
+                    auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
+                    value += filter(v, u) * std::get<0>(yCbCr);
+                }
             }
-        }
-        value /= n;
-        auto old_color = rgbToYCbCr(image->pixelColor(i, j));
-        std::get<0>(old_color) = value;
-        image->setPixelColor(i, j, yCbCrToRgb(old_color));
-    });
-    emit imageUpdated(image);
-    logFile << "applied normal filter " << std::endl;
-    renewLogging();
+            value /= n;
+            auto old_color = rgbToYCbCr(image->pixelColor(i, j));
+            std::get<0>(old_color) = value;
+            image->setPixelColor(i, j, yCbCrToRgb(old_color));
+        });
+        emit imageUpdated(image);
+        renewLogging();
+    }
 }
 
 int ImageViewer::rgbToGray(int red, int green, int blue)
