@@ -64,6 +64,7 @@ private slots:
     void borderStrategyChangedConstant();
     void borderStrategyChangedMirror();
     void applyFilterClicked();
+    void applyGaussianFilterClicked();
 
     void open();
     void print();
@@ -108,6 +109,7 @@ public:
     void setFilterTableWidgets();
     void applyFilter(Eigen::MatrixXd filter);
     void createHistogram(QImage *image, int *hist);
+    Eigen::MatrixXd createGaussianKernel(double sigma);
 
 protected:
     void resizeEvent(QResizeEvent *event);
@@ -171,6 +173,7 @@ private:
     std::vector<std::vector<int>> *filter;
     QPushButton *applyFilterButton;
     std::function<QColor(int, int, QImage *)> borderStrategy;
+    QSpinBox *sigmaSpinBox;
 
     std::fstream logFile;
 

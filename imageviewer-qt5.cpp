@@ -21,10 +21,10 @@ using namespace std;
 #define DEFAULT_FILTER_SIZE 3
 #define DEFAULT_FILTER_INPUT 1
 #define DEFAULT_SIGMA_INPUT 1
-#define MIN_FILTER_INPUT 1
+#define MIN_FILTER_INPUT -100
 #define MIN_SIGMA_INPUT 1
 #define MAX_FILTER_INPUT 100
-#define MAX_SIGMA_INPUT 5
+#define MAX_SIGMA_INPUT 10
 #define MAX_FILTER_SIZE 13
 
 ImageViewer::ImageViewer()
@@ -191,6 +191,11 @@ void ImageViewer::applyFilterClicked()
         }
     });
     applyFilter(filter);
+}
+
+void ImageViewer::applyGaussianFilterClicked()
+{
+    applyFilter(createGaussianKernel(sigmaSpinBox->value()));
 }
 
 /* PUBLIC */
@@ -439,6 +444,19 @@ QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
     return image->pixelColor(x, y);
 }
 
+Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
+{
+    int center = (int)(sigma * 3.0);
+    Eigen::VectorXd h = Eigen::VectorXd(2 * center + 1);
+    double sigma2 = sigma * sigma;
+    for (int i = 0; i < h.size(); i++)
+    {
+        double r = center - i;
+        h[i] = (double)(exp(-0.5 * (r * r) / sigma2));
+    }
+    return h * h.transpose();
+}
+
 void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 {
 
@@ -447,47 +465,82 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
         logFile << "Applying this filter:" << endl
                 << filter << endl;
 
-        // check if separable
+        // check if separable using SVD
         Eigen::JacobiSVD<Eigen::MatrixXd> svd(filter, Eigen::ComputeThinU | Eigen::ComputeThinV);
-        logFile << "Its singular values are:" << endl
-                << svd.singularValues() << endl;
         bool isSeparable = svd.rank() == 1;
+        std::function<int(int x, int y, QImage *image)> filterFunc;
 
         if (isSeparable)
         {
-            logFile << "is separable" << std::endl;
-        }
-        logFile << "Its rank is: " << endl
-                << svd.rank() << endl;
-        logFile << "Its left singular vectors are the columns of the thin U matrix:" << endl
-                << svd.matrixU() << endl;
-        logFile << "Its right singular vectors are the columns of the thin V matrix:" << endl
-                << svd.matrixV() << endl;
-        logFile << svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]) << endl;
-        logFile << svd.matrixV()(Eigen::all, 0).transpose() * sqrt(svd.singularValues()[0]) << endl;
-
-        double sum = 0.0;
-        iterateRect(filter.rows(), filter.cols(), [this, &filter, &sum](int i, int j) {
-            sum += filter(i, j);
-        });
-        int n = (int)(sum + 0.5);
-        int x_h = (int)(filter.rows()) / 2;
-        int y_h = (int)(filter.cols()) / 2;
-        iteratePixels([this, n, x_h, y_h, &filter](int i, int j) {
-            int value = 0;
-            for (int u = 0; u < filter.cols(); u++)
-            {
-                for (int v = 0; v < filter.rows(); v++)
+            VectorXd H_x = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
+            VectorXd H_y = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
+            cout << svd.matrixU() << endl;
+            cout << svd.matrixV() << endl;
+            int x_h = (int)(H_x.size()) / 2;
+            int y_h = (int)(H_y.size()) / 2;
+            logFile << "Filter is separable!" << std::endl;
+            logFile << "H_x: " << H_x << endl;
+            logFile << "H_y: " << H_y << endl;
+            delete image;
+            image = new QImage(originalImage->copy());
+            iteratePixels([this, H_x, H_y, x_h, y_h](int x, int y) {
+                double total_x = 0;
+                double n = 0;
+                for (int i = 0; i < H_x.size(); i++)
                 {
-                    auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
-                    value += filter(v, u) * std::get<0>(yCbCr);
+                    int intensity = std::get<0>(rgbToYCbCr(getFilterPixel(x - x_h + i, y, image)));
+                    total_x += H_x(i) * intensity;
+                    n += H_x(i);
                 }
-            }
-            value /= n;
-            auto old_color = rgbToYCbCr(image->pixelColor(i, j));
-            std::get<0>(old_color) = value;
-            image->setPixelColor(i, j, yCbCrToRgb(old_color));
-        });
+                total_x /= n;
+                auto old_color = rgbToYCbCr(originalImage->pixelColor(x, y));
+                std::get<0>(old_color) = total_x;
+                image->setPixelColor(x, y, yCbCrToRgb(old_color));
+            });
+            QImage *buffer = new QImage(image->copy());
+            iteratePixels([this, H_x, H_y, x_h, y_h, buffer](int x, int y) {
+                double n = 0;
+                double total_y = 0;
+                for (int i = 0; i < H_y.size(); i++)
+                {
+                    int intensity = std::get<0>(rgbToYCbCr(getFilterPixel(x, y - y_h + i, buffer)));
+                    total_y += H_x(i) * intensity;
+                    n += H_y(i);
+                }
+                total_y /= n;
+                auto old_color = rgbToYCbCr(image->pixelColor(x, y));
+                std::get<0>(old_color) = total_y;
+                image->setPixelColor(x, y, yCbCrToRgb(old_color));
+            });
+            delete buffer;
+        }
+        else
+        {
+            double n = 0.0;
+            iterateRect(filter.rows(), filter.cols(), [this, &filter, &n](int i, int j) {
+                n += filter(i, j);
+            });
+            int x_h = (int)(filter.rows()) / 2;
+            int y_h = (int)(filter.cols()) / 2;
+            filterFunc = [this, n, x_h, y_h, &filter](int i, int j, QImage *img) {
+                double value = 0;
+                for (int u = 0; u < filter.cols(); u++)
+                {
+                    for (int v = 0; v < filter.rows(); v++)
+                    {
+                        auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, img));
+                        value += filter(v, u) * std::get<0>(yCbCr);
+                    }
+                }
+                return value / n;
+            };
+            iteratePixels([this, filterFunc](int i, int j) {
+                auto old_color = rgbToYCbCr(originalImage->pixelColor(i, j));
+                std::get<0>(old_color) = filterFunc(i, j, originalImage);
+                image->setPixelColor(i, j, yCbCrToRgb(old_color));
+            });
+        }
+
         emit imageUpdated(image);
         renewLogging();
     }
@@ -745,7 +798,7 @@ void ImageViewer::generateControlPanels()
     QVBoxLayout *gaussianFilterLayout = new QVBoxLayout;
 
     QHBoxLayout *sigmaLayout = new QHBoxLayout();
-    QSpinBox *sigmaSpinBox = new QSpinBox();
+    sigmaSpinBox = new QSpinBox();
     sigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
     sigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
     sigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
@@ -753,7 +806,7 @@ void ImageViewer::generateControlPanels()
     sigmaLayout->addWidget(sigmaSpinBox);
 
     QPushButton *applyGaussianFilterButton = new QPushButton("Apply gaussian filter");
-    QObject::connect(applyGaussianFilterButton, SIGNAL(clicked()), SLOT(applyFilterClicked()));
+    QObject::connect(applyGaussianFilterButton, SIGNAL(clicked()), SLOT(applyGaussianFilterClicked()));
 
     gaussianFilterLayout->addLayout(sigmaLayout);
     gaussianFilterLayout->addWidget(applyGaussianFilterButton);
