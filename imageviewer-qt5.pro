@@ -1,5 +1,5 @@
 QT += widgets
-QT += charts
+
 qtHaveModule(printsupport): QT += printsupport
 
 HEADERS       = imageviewer-qt5.h \

@@ -5,7 +5,6 @@
 #include <QGroupBox>
 #include <QWidget>
 #include <QHBoxLayout>
-#include <QBarSet>
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
 #endif
@@ -26,6 +25,9 @@ using namespace std;
 #define MAX_FILTER_INPUT 100
 #define MAX_SIGMA_INPUT 10
 #define MAX_FILTER_SIZE 13
+
+#define HIST_SPACING 3
+#define HIST_PADDING 20
 
 ImageViewer::ImageViewer()
 {
@@ -66,6 +68,18 @@ void ImageViewer::imageChanged(QImage *image)
     int hist[GRAY_SPECTRUM] = {0};
     createHistogram(image, hist);
 
+    // calculate relative histogram
+    double rel_hist[GRAY_SPECTRUM] = {0};
+    int max = 0;
+    for (int k = 0; k < GRAY_SPECTRUM; k++)
+    {
+        if (hist[k] > max)
+        {
+            max = hist[k];
+        }
+        rel_hist[k] = hist[k] / (double)MN;
+    }
+
     // calculate average
     double avg = 0.0;
     for (int k = 0; k < GRAY_SPECTRUM; k++)
@@ -81,40 +95,40 @@ void ImageViewer::imageChanged(QImage *image)
         var += (hist[k] / (double)MN) * pow(k - avg, 2);
     }
 
-    QBarSet *hist_set = new QBarSet("histogram");
-    for (int k = 0; k < GRAY_SPECTRUM; k++)
-    {
-        hist_set->append(hist[k]);
-    }
     // display values
     averageInfo->setNum(avg);
     varianceInfo->setNum(var);
 
-    QBarSeries *series = new QBarSeries();
-    series->append(hist_set);
+    if (histogramChart != NULL)
+    {
+        for (auto &item : histogramChart->items())
+        {
+            histogramChart->removeItem(item);
+        }
+    }
+    else
+    {
+        histogramChart = new QGraphicsScene();
+        histogramChartView = new QGraphicsView(histogramChart);
+        histogramChartView->scale(1, -1);
+        stack->addWidget(histogramChartView);
+        stack->setCurrentWidget(histogramChartView);
+    }
+    int width = histogramChartView->size().width();
+    int height = histogramChartView->size().height();
+    double height_h = height / 2.0;
 
-    histogramChart = new QChart();
-    histogramChart->addSeries(series);
-    histogramChart->setTitle("Histogram");
-    histogramChart->setAnimationOptions(QChart::SeriesAnimations);
+    cout << width << endl;
+    cout << height << endl;
 
-    QValueAxis *axisX = new QValueAxis();
-    axisX->setRange(0.0, 255.0);
-    histogramChart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
-
-    QValueAxis *axisY = new QValueAxis();
-    histogramChart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
-
-    histogramChart->legend()->setVisible(false);
-    histogramChart->legend()->setAlignment(Qt::AlignBottom);
-
-    histogramChartView = new QChartView(histogramChart);
-    histogramChartView->setRenderHint(QPainter::Antialiasing);
-
-    stack->addWidget(histogramChartView);
-    stack->setCurrentWidget(histogramChartView);
+    int barWidth = (int)((width - GRAY_SPECTRUM * HIST_SPACING) / (double)GRAY_SPECTRUM) + 0.5;
+    int posX = 0.0;
+    for (int i = 0; i < GRAY_SPECTRUM; i++)
+    {
+        int barHeight = (int)((hist[i] / (double)max) * (height - HIST_PADDING)) + 0.5;
+        histogramChart->addRect(QRect(posX, 0, barWidth, barHeight));
+        posX += barWidth + HIST_SPACING;
+    }
 
     updateImageDisplay();
 }

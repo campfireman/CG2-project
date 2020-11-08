@@ -22,15 +22,14 @@ using namespace Eigen;
 #include "fstream"
 #include <functional>
 #include <QStackedLayout>
-#include <QtCharts>
-#include <QChart>
-#include <QBarSeries>
 #include <QSlider>
 #include <QSpinBox>
 #include <QTableWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QRect>
 #include <tuple>
 #include <vector>
-using namespace QtCharts;
 class QAction;
 class QLabel;
 class QMenu;
@@ -160,9 +159,9 @@ private:
     QSlider *crossSlider;
     QLabel *varianceInfo;
     QLabel *averageInfo;
+    QGraphicsScene *histogramChart;
+    QGraphicsView *histogramChartView;
     QSlider *quantizationSlider;
-    QChart *histogramChart;
-    QChartView *histogramChartView;
     QStackedLayout *stack;
     QSlider *brightnessSlider;
     QSlider *contrastSlider;
