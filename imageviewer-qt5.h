@@ -47,16 +47,13 @@ class ImageViewer : public QMainWindow
     Q_OBJECT
 
 private slots:
-
-    void applyExampleAlgorithm();
-
-    // hier können weitere als SLOTS definierte Funktionen hin, die auf Knopfdruck etc. aufgerufen werden.
+    void imageChanged(QImage *image);
+    void applyExampleAlgorithmClicked();
     void crossSliderValueChanged(int value);
     void quantizationSliderValueChanged(int value);
     void brightnessSliderValueChanged(int value);
     void contrastSliderValueChanged(int value);
     void robustContrastSliderValueChanged(int value);
-    void imageChanged(QImage *image);
     void filterMChanged(int value);
     void filterNChanged(int value);
     void borderStrategyChangedPad();
@@ -77,7 +74,6 @@ signals:
     void imageUpdated(QImage *image);
 
 public:
-    // original
     ImageViewer();
     bool loadFile(const QString &);
     void updateImageDisplay();
@@ -85,6 +81,19 @@ public:
 
     // setters
     void setBorderStrategy(std::function<QColor(int, int, QImage *)> strategy);
+
+    // actions
+    void updateImageInformation(QImage *image);
+    void quantizeImage(int value);
+    void drawCross(int value);
+    void changeBrightness(int value);
+    void changeContrast(int value);
+    void changeRobustContrast(int value);
+    void changeFilterTableWidth(int value);
+    void changeFilterTableHeight(int value);
+    void setFilterTableWidgets();
+    void applyFilter(Eigen::MatrixXd filter);
+    void createHistogram(QImage *image, int *hist);
 
     // helpers
     int rgbToGray(int red, int green, int blue);
@@ -96,35 +105,21 @@ public:
     std::tuple<int, int, int> rgbToYCbCr(QColor rgb);
     QColor yCbCrToRgb(std::tuple<int, int, int> val);
     int clamp(int value, int min, int max);
-
-    // actions
-    void quantizeImage(int value);
-    void drawCross(int value);
-    void changeBrightness(int value);
-    void changeContrast(int value);
-    void changeRobustContrast(int value);
-    void changeFilterTableWidth(int value);
-    void changeFilterTableHeight(int value);
-    void setFilterTableWidgets();
-    void applyFilter(Eigen::MatrixXd filter);
-    void createHistogram(QImage *image, int *hist);
     Eigen::MatrixXd createGaussianKernel(double sigma);
+    QColor getFilterPixel(int i, int j, QImage *image);
+
+    static QColor borderPad(int i, int j, QImage *image);
+    static QColor borderConstant(int i, int j, QImage *image);
+    static QColor borderMirror(int i, int j, QImage *image);
 
 protected:
     void resizeEvent(QResizeEvent *event);
 
 private:
-    // in diesen Beiden Methoden sind Änderungen nötig bzw. sie dienen als
-    // Vorlage für eigene Methoden.
+    void setDefaults();
+    void resetImage();
     void generateControlPanels();
 
-    void setDefaults();
-    QColor getFilterPixel(int i, int j, QImage *image);
-    static QColor borderPad(int i, int j, QImage *image);
-    static QColor borderConstant(int i, int j, QImage *image);
-    static QColor borderMirror(int i, int j, QImage *image);
-
-    // Ab hier technische Details die nicht für das Verständnis notwendig sind.
     void startLogging();
     void generateMainGui();
 
@@ -135,25 +130,7 @@ private:
     void adjustScrollBar(QScrollBar *scrollBar, double factor);
     void renewLogging();
 
-    QTabWidget *tabWidget;
-    QTabWidget *imageInfo;
-    QTextEdit *logBrowser;
-    QWidget *centralwidget;
-    QLabel *imageLabel;
-    QScrollArea *scrollArea;
-    double scaleFactor;
-    QImage *image;
-    QWidget *m_option_panel1;
-    QVBoxLayout *m_option_layout1;
-
-    QWidget *m_option_panel2;
-    QVBoxLayout *m_option_layout2;
-
-    QPushButton *button1;
-    QPushButton *cross_draw_button;
-    QSpinBox *spinbox1;
-
-    // custom
+    // custom attributes
     QImage *originalImage;
     int o_hist[GRAY_SPECTRUM] = {0};
     QSlider *crossSlider;
@@ -173,6 +150,24 @@ private:
     QPushButton *applyFilterButton;
     std::function<QColor(int, int, QImage *)> borderStrategy;
     QSpinBox *sigmaSpinBox;
+
+    QTabWidget *tabWidget;
+    QTabWidget *imageInfo;
+    QTextEdit *logBrowser;
+    QWidget *centralwidget;
+    QLabel *imageLabel;
+    QScrollArea *scrollArea;
+    double scaleFactor;
+    QImage *image;
+    QWidget *m_option_panel1;
+    QVBoxLayout *m_option_layout1;
+
+    QWidget *m_option_panel2;
+    QVBoxLayout *m_option_layout2;
+
+    QPushButton *button1;
+    QPushButton *cross_draw_button;
+    QSpinBox *spinbox1;
 
     std::fstream logFile;
 

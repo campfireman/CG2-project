@@ -62,78 +62,12 @@ bool ImageViewer::imageIsLoaded()
 
 void ImageViewer::imageChanged(QImage *image)
 {
-    int MN = image->width() * image->height();
-
-    // create histogram
-    int hist[GRAY_SPECTRUM] = {0};
-    createHistogram(image, hist);
-
-    // calculate relative histogram
-    double rel_hist[GRAY_SPECTRUM] = {0};
-    int max = 0;
-    for (int k = 0; k < GRAY_SPECTRUM; k++)
-    {
-        if (hist[k] > max)
-        {
-            max = hist[k];
-        }
-        rel_hist[k] = hist[k] / (double)MN;
-    }
-
-    // calculate average
-    double avg = 0.0;
-    for (int k = 0; k < GRAY_SPECTRUM; k++)
-    {
-        avg += hist[k] * k;
-    }
-    avg /= MN;
-
-    // calculate variance
-    double var = 0.0;
-    for (int k = 0; k < GRAY_SPECTRUM; k++)
-    {
-        var += (hist[k] / (double)MN) * pow(k - avg, 2);
-    }
-
-    // display values
-    averageInfo->setNum(avg);
-    varianceInfo->setNum(var);
-
-    if (histogramChart != NULL)
-    {
-        for (auto &item : histogramChart->items())
-        {
-            histogramChart->removeItem(item);
-        }
-    }
-    else
-    {
-        histogramChart = new QGraphicsScene();
-        histogramChartView = new QGraphicsView(histogramChart);
-        histogramChartView->scale(1, -1);
-        stack->addWidget(histogramChartView);
-        stack->setCurrentWidget(histogramChartView);
-    }
-    int width = histogramChartView->size().width();
-    int height = histogramChartView->size().height();
-    double height_h = height / 2.0;
-
-    cout << width << endl;
-    cout << height << endl;
-
-    int barWidth = (int)((width - GRAY_SPECTRUM * HIST_SPACING) / (double)GRAY_SPECTRUM) + 0.5;
-    int posX = 0.0;
-    for (int i = 0; i < GRAY_SPECTRUM; i++)
-    {
-        int barHeight = (int)((hist[i] / (double)max) * (height - HIST_PADDING)) + 0.5;
-        histogramChart->addRect(QRect(posX, 0, barWidth, barHeight));
-        posX += barWidth + HIST_SPACING;
-    }
-
+    updateImageInformation(image);
     updateImageDisplay();
+    renewLogging();
 }
 
-void ImageViewer::applyExampleAlgorithm()
+void ImageViewer::applyExampleAlgorithmClicked()
 {
     if (imageIsLoaded())
     {
@@ -212,7 +146,9 @@ void ImageViewer::applyGaussianFilterClicked()
     applyFilter(createGaussianKernel(sigmaSpinBox->value()));
 }
 
-/* PUBLIC */
+/*
+ * PUBLIC
+ */
 
 // setters
 
@@ -222,6 +158,74 @@ void ImageViewer::setBorderStrategy(std::function<QColor(int, int, QImage *)> st
 }
 
 // actions
+
+void ImageViewer::updateImageInformation(QImage *image)
+{
+    int MN = image->width() * image->height();
+
+    // create histogram
+    int hist[GRAY_SPECTRUM] = {0};
+    createHistogram(image, hist);
+
+    // calculate average
+    double avg = 0.0;
+    for (int k = 0; k < GRAY_SPECTRUM; k++)
+    {
+        avg += hist[k] * k;
+    }
+    avg /= MN;
+
+    // calculate variance
+    double var = 0.0;
+    for (int k = 0; k < GRAY_SPECTRUM; k++)
+    {
+        var += (hist[k] / (double)MN) * pow(k - avg, 2);
+    }
+
+    // display values
+    averageInfo->setNum(avg);
+    varianceInfo->setNum(var);
+
+    // find max value to scale histogram
+    int max = 0;
+    for (int k = 0; k < GRAY_SPECTRUM; k++)
+    {
+        if (hist[k] > max)
+        {
+            max = hist[k];
+        }
+    }
+
+    // histogram
+    if (histogramChart != NULL)
+    {
+        // delete all bars if histogram already exists
+        for (auto &item : histogramChart->items())
+        {
+            histogramChart->removeItem(item);
+        }
+    }
+    else
+    {
+        histogramChart = new QGraphicsScene();
+        histogramChartView = new QGraphicsView(histogramChart);
+        // flip histogram for comfort
+        histogramChartView->scale(1, -1);
+        stack->addWidget(histogramChartView);
+        stack->setCurrentWidget(histogramChartView);
+    }
+    int width = histogramChartView->size().width();
+    int height = histogramChartView->size().height();
+
+    int barWidth = (int)((width - GRAY_SPECTRUM * HIST_SPACING) / (double)GRAY_SPECTRUM) + 0.5;
+    int posX = 0.0;
+    for (int i = 0; i < GRAY_SPECTRUM; i++)
+    {
+        int barHeight = (int)((hist[i] / (double)max) * (height - HIST_PADDING)) + 0.5;
+        histogramChart->addRect(QRect(posX, 0, barWidth, barHeight));
+        posX += barWidth + HIST_SPACING;
+    }
+}
 
 void ImageViewer::createHistogram(QImage *image, int *hist)
 {
@@ -260,9 +264,8 @@ void ImageViewer::drawCross(int value)
                 image->setPixelColor(x_r, y_r, originalImage->pixelColor(x_r, y_l));
             }
         }
-        emit imageUpdated(image);
         logFile << "drew red cross" << std::endl;
-        renewLogging();
+        emit imageUpdated(image);
     }
 }
 
@@ -281,10 +284,9 @@ void ImageViewer::quantizeImage(int value)
                 image->setPixelColor(i, j, color);
             });
         }
-        emit imageUpdated(image);
         logFile << "quantized to " << value << "-bit" << std::endl;
         logFile << div << std::endl;
-        renewLogging();
+        emit imageUpdated(image);
     }
 }
 
@@ -299,9 +301,8 @@ void ImageViewer::changeBrightness(int value)
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
             image->setPixelColor(i, j, yCbCrToRgb(color));
         });
-        emit imageUpdated(image);
         logFile << "added brightness of " << value << std::endl;
-        renewLogging();
+        emit imageUpdated(image);
     }
 }
 void ImageViewer::changeContrast(int value)
@@ -315,9 +316,8 @@ void ImageViewer::changeContrast(int value)
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
             image->setPixelColor(i, j, yCbCrToRgb(color));
         });
-        emit imageUpdated(image);
         logFile << "changed contrast with factor of " << factor << std::endl;
-        renewLogging();
+        emit imageUpdated(image);
     }
 }
 
@@ -371,9 +371,8 @@ void ImageViewer::changeRobustContrast(int value)
             std::get<0>(color) = intensity;
             image->setPixelColor(i, j, yCbCrToRgb(color));
         });
-        emit imageUpdated(image);
         logFile << "changed robust contrast with percentage of " << factor << std::endl;
-        renewLogging();
+        emit imageUpdated(image);
     }
 }
 
@@ -403,73 +402,6 @@ void ImageViewer::setFilterTableWidgets()
         }
     });
 }
-QColor ImageViewer::borderPad(int x, int y, QImage *image)
-{
-    return QColor(0, 0, 0);
-}
-QColor ImageViewer::borderConstant(int x, int y, QImage *image)
-{
-    if (x > image->width() - 1)
-    {
-        x = image->width() - 1;
-    }
-    else if (x < 0)
-    {
-        x = 0;
-    }
-    if (y > image->height() - 1)
-    {
-        y = image->height() - 1;
-    }
-    else if (y < 0)
-    {
-        y = 0;
-    }
-    return image->pixelColor(x, y);
-}
-QColor ImageViewer::borderMirror(int x, int y, QImage *image)
-{
-    if (x > image->width() - 1)
-    {
-        int dist = x - image->width();
-        x = image->width() - 1 - dist;
-    }
-    else if (x < 0)
-    {
-        x = -x;
-    }
-    if (y > image->height() - 1)
-    {
-        int dist = y - image->height();
-        y = image->height() - 1 - dist;
-    }
-    else if (y < 0)
-    {
-        y = -y;
-    }
-    return image->pixelColor(x, y);
-}
-QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
-{
-    if (x < 0 || y < 0 || x > image->width() - 1 || y > image->height() - 1)
-    {
-        return borderStrategy(x, y, image);
-    }
-    return image->pixelColor(x, y);
-}
-
-Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
-{
-    int center = (int)(sigma * 3.0);
-    Eigen::VectorXd h = Eigen::VectorXd(2 * center + 1);
-    double sigma2 = sigma * sigma;
-    for (int i = 0; i < h.size(); i++)
-    {
-        double r = center - i;
-        h[i] = (double)(exp(-0.5 * (r * r) / sigma2));
-    }
-    return h * h.transpose();
-}
 
 void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 {
@@ -486,6 +418,8 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 
         if (isSeparable)
         {
+            // use SVD to determine if filter is separable
+            // thanks to https://web.archive.org/web/20200804115435/https://bartwronski.com/2020/02/03/separate-your-filters-svd-and-low-rank-approximation-of-image-filters/
             VectorXd H_x = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             VectorXd H_y = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             cout << svd.matrixU() << endl;
@@ -493,10 +427,15 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             int x_h = (int)(H_x.size()) / 2;
             int y_h = (int)(H_y.size()) / 2;
             logFile << "Filter is separable!" << std::endl;
-            logFile << "H_x: " << H_x << endl;
-            logFile << "H_y: " << H_y << endl;
-            delete image;
-            image = new QImage(originalImage->copy());
+            logFile << "H_x:" << endl
+                    << H_x << endl;
+            logFile << "H_y:" << endl
+                    << H_y << endl;
+
+            // reset image so filter don't stack
+            resetImage();
+
+            // apply 1D filter x dimenstion
             iteratePixels([this, H_x, H_y, x_h, y_h](int x, int y) {
                 double total_x = 0;
                 double n = 0;
@@ -511,7 +450,10 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
                 std::get<0>(old_color) = total_x;
                 image->setPixelColor(x, y, yCbCrToRgb(old_color));
             });
+
+            // save intermediate values to buffer image
             QImage *buffer = new QImage(image->copy());
+            // apply 1D filter y dimenstion
             iteratePixels([this, H_x, H_y, x_h, y_h, buffer](int x, int y) {
                 double n = 0;
                 double total_y = 0;
@@ -536,29 +478,28 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             });
             int x_h = (int)(filter.rows()) / 2;
             int y_h = (int)(filter.cols()) / 2;
-            filterFunc = [this, n, x_h, y_h, &filter](int i, int j, QImage *img) {
+            iteratePixels([this, x_h, y_h, filter, n](int i, int j) {
                 double value = 0;
                 for (int u = 0; u < filter.cols(); u++)
                 {
                     for (int v = 0; v < filter.rows(); v++)
                     {
-                        auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, img));
+                        auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
                         value += filter(v, u) * std::get<0>(yCbCr);
                     }
                 }
-                return value / n;
-            };
-            iteratePixels([this, filterFunc](int i, int j) {
+                value /= n;
                 auto old_color = rgbToYCbCr(originalImage->pixelColor(i, j));
-                std::get<0>(old_color) = filterFunc(i, j, originalImage);
+                std::get<0>(old_color) = value;
                 image->setPixelColor(i, j, yCbCrToRgb(old_color));
             });
         }
 
         emit imageUpdated(image);
-        renewLogging();
     }
 }
+
+// helpers
 
 int ImageViewer::rgbToGray(int red, int green, int blue)
 {
@@ -634,7 +575,83 @@ int ImageViewer::clamp(int value, int min, int max)
     return value;
 }
 
-/* PRIVATE */
+Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
+{
+    int center = (int)(sigma * 3.0);
+    Eigen::VectorXd h = Eigen::VectorXd(2 * center + 1);
+    double sigma2 = sigma * sigma;
+    for (int i = 0; i < h.size(); i++)
+    {
+        double r = center - i;
+        h[i] = (double)(exp(-0.5 * (r * r) / sigma2));
+    }
+    return h * h.transpose();
+}
+
+QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
+{
+    if (x < 0 || y < 0 || x > image->width() - 1 || y > image->height() - 1)
+    {
+        return borderStrategy(x, y, image);
+    }
+    return image->pixelColor(x, y);
+}
+
+#pragma GCC diagnostic push
+// for common interface these variables are not used
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+QColor ImageViewer::borderPad(int x, int y, QImage *image)
+{
+    return QColor(0, 0, 0);
+}
+#pragma GCC diagnostic pop
+
+QColor ImageViewer::borderConstant(int x, int y, QImage *image)
+{
+    if (x > image->width() - 1)
+    {
+        x = image->width() - 1;
+    }
+    else if (x < 0)
+    {
+        x = 0;
+    }
+    if (y > image->height() - 1)
+    {
+        y = image->height() - 1;
+    }
+    else if (y < 0)
+    {
+        y = 0;
+    }
+    return image->pixelColor(x, y);
+}
+QColor ImageViewer::borderMirror(int x, int y, QImage *image)
+{
+    if (x > image->width() - 1)
+    {
+        int dist = x - image->width();
+        x = image->width() - 1 - dist;
+    }
+    else if (x < 0)
+    {
+        x = -x;
+    }
+    if (y > image->height() - 1)
+    {
+        int dist = y - image->height();
+        y = image->height() - 1 - dist;
+    }
+    else if (y < 0)
+    {
+        y = -y;
+    }
+    return image->pixelColor(x, y);
+}
+
+/*
+ * PRIVATE
+ */
 void ImageViewer::setDefaults()
 {
     crossSlider->blockSignals(true);
@@ -643,6 +660,12 @@ void ImageViewer::setDefaults()
     quantizationSlider->blockSignals(true);
     quantizationSlider->setValue(DEFAULT_QUANTIZATION_SLIDER);
     quantizationSlider->blockSignals(false);
+}
+
+void ImageViewer::resetImage()
+{
+    delete image;
+    image = new QImage(originalImage->copy());
 }
 void ImageViewer::generateControlPanels()
 {
@@ -656,7 +679,7 @@ void ImageViewer::generateControlPanels()
 
     button1 = new QPushButton();
     button1->setText("Apply algorithm");
-    QObject::connect(button1, SIGNAL(clicked()), this, SLOT(applyExampleAlgorithm()));
+    QObject::connect(button1, SIGNAL(clicked()), this, SLOT(applyExampleAlgorithmClicked()));
 
     QGroupBox *cross_group = new QGroupBox("Red cross");
     QVBoxLayout *cross_layout = new QVBoxLayout();
