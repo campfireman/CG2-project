@@ -5,14 +5,24 @@
 #include <QGroupBox>
 #include <QWidget>
 #include <QHBoxLayout>
+#include <QStackedLayout>
+#include <QSlider>
+#include <QSpinBox>
+#include <QTableWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
+#include <QRect>
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
 #endif
 #include <iostream>
 #include <cmath>
-#include "imageviewer-qt5.h"
 
 using namespace std;
+
+#include "imageviewer-qt5.h"
+#include "utils/QUnevenIntSpinBox.h"
+
 #define DEFAULT_CROSS_SLIDER 49
 #define DEFAULT_QUANTIZATION_SLIDER 8
 #define DEFAULT_CONTRAST_SLIDER 0
@@ -422,8 +432,6 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             // thanks to https://web.archive.org/web/20200804115435/https://bartwronski.com/2020/02/03/separate-your-filters-svd-and-low-rank-approximation-of-image-filters/
             VectorXd H_x = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             VectorXd H_y = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
-            cout << svd.matrixU() << endl;
-            cout << svd.matrixV() << endl;
             int x_h = (int)(H_x.size()) / 2;
             int y_h = (int)(H_y.size()) / 2;
             logFile << "Filter is separable!" << std::endl;
@@ -798,7 +806,7 @@ void ImageViewer::generateControlPanels()
     QVBoxLayout *filterLayout = new QVBoxLayout;
 
     QHBoxLayout *filterMInfo = new QHBoxLayout();
-    filterM = new UnevenIntSpinBox();
+    filterM = new QUnevenIntSpinBox();
     filterM->setMinimum(1);
     filterM->setMaximum(MAX_FILTER_SIZE);
     filterM->setSingleStep(2);
@@ -808,7 +816,7 @@ void ImageViewer::generateControlPanels()
     QObject::connect(filterM, SIGNAL(valueChanged(int)), this, SLOT(filterMChanged(int)));
 
     QHBoxLayout *filterNInfo = new QHBoxLayout();
-    filterN = new UnevenIntSpinBox();
+    filterN = new QUnevenIntSpinBox();
     filterN->setMinimum(1);
     filterN->setMaximum(MAX_FILTER_SIZE);
     filterN->setSingleStep(2);

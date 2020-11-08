@@ -18,24 +18,24 @@
 #pragma GCC diagnostic pop
 using namespace Eigen;
 
-#include "utils/UnevenIntSpinBox.h"
 #include "fstream"
 #include <functional>
-#include <QStackedLayout>
-#include <QSlider>
-#include <QSpinBox>
-#include <QTableWidget>
-#include <QGraphicsScene>
-#include <QGraphicsView>
-#include <QRect>
 #include <tuple>
 #include <vector>
 class QAction;
+class QGraphicsScene;
+class QGraphicsView;
 class QLabel;
 class QMenu;
+class QRect;
 class QScrollArea;
 class QScrollBar;
+class QSlider;
+class QSpinBox;
+class QStackedLayout;
+class QTableWidget;
 class QTextEdit;
+class QUnevenIntSpinBox;
 class QVBoxLayout;
 class QTabWidget;
 class QPushButton;
@@ -143,8 +143,8 @@ private:
     QSlider *brightnessSlider;
     QSlider *contrastSlider;
     QSlider *robustContrastSlider;
-    UnevenIntSpinBox *filterM;
-    UnevenIntSpinBox *filterN;
+    QUnevenIntSpinBox *filterM;
+    QUnevenIntSpinBox *filterN;
     QTableWidget *filterTable;
     std::vector<std::vector<int>> *filter;
     QPushButton *applyFilterButton;

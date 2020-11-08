@@ -1,4 +1,4 @@
-#include "./UnevenIntSpinBox.h"
+#include "./QUnevenIntSpinBox.h"
 #include <QString>
 #include <iostream>
 
@@ -7,7 +7,7 @@
  * thanks to https://stackoverflow.com/questions/40416074/how-to-implement-a-validator-for-a-spin-box-to-check-if-n-mod-k-0
  * 
  */
-QValidator::State UnevenIntSpinBox::validate(QString &text, int &pos) const
+QValidator::State QUnevenIntSpinBox::validate(QString &text, int &pos) const
 {
     QIntValidator validator;
     validator.setBottom(minimum());
