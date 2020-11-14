@@ -2,6 +2,7 @@
 
 #include <Qt>
 #include <QtWidgets>
+#include <QCheckBox>
 #include <QGroupBox>
 #include <QWidget>
 #include <QHBoxLayout>
@@ -30,6 +31,7 @@ using namespace std;
 #define DEFAULT_FILTER_SIZE 3
 #define DEFAULT_FILTER_INPUT 1
 #define DEFAULT_SIGMA_INPUT 1
+#define DEFAULT_DERIVATION_CHECKBOX Qt::Unchecked
 #define MIN_FILTER_INPUT -100
 #define MIN_SIGMA_INPUT 1
 #define MAX_FILTER_INPUT 100
@@ -45,6 +47,8 @@ ImageViewer::ImageViewer()
     originalImage = NULL;
     histogramChart = NULL;
     histogramChartView = NULL;
+    isDerivationFilter = DEFAULT_DERIVATION_CHECKBOX == Qt::Checked;
+
     setBorderStrategy(borderPad);
     resize(1600, 600);
 
@@ -156,6 +160,11 @@ void ImageViewer::applyGaussianFilterClicked()
     applyFilter(createGaussianKernel(sigmaSpinBox->value()));
 }
 
+void ImageViewer::derivationFilterStateChanged(int state)
+{
+    setIsDerivationFilter(state == Qt::Checked);
+}
+
 /*
  * PUBLIC
  */
@@ -165,6 +174,11 @@ void ImageViewer::applyGaussianFilterClicked()
 void ImageViewer::setBorderStrategy(std::function<QColor(int, int, QImage *)> strategy)
 {
     borderStrategy = strategy;
+}
+
+void ImageViewer::setIsDerivationFilter(bool state)
+{
+    isDerivationFilter = state;
 }
 
 // actions
@@ -430,8 +444,8 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
         {
             // use SVD to determine if filter is separable
             // thanks to https://web.archive.org/web/20200804115435/https://bartwronski.com/2020/02/03/separate-your-filters-svd-and-low-rank-approximation-of-image-filters/
-            VectorXd H_x = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
-            VectorXd H_y = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
+            VectorXd H_x = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
+            VectorXd H_y = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             int x_h = (int)(H_x.size()) / 2;
             int y_h = (int)(H_y.size()) / 2;
             logFile << "Filter is separable!" << std::endl;
@@ -443,63 +457,64 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             // reset image so filter don't stack
             resetImage();
 
+            std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
+
             // apply 1D filter x dimenstion
-            iteratePixels([this, H_x, H_y, x_h, y_h](int x, int y) {
+            iteratePixels([this, H_x, H_y, x_h, &buffer](int x, int y) {
                 double total_x = 0;
                 double n = 0;
                 for (int i = 0; i < H_x.size(); i++)
                 {
-                    int intensity = std::get<0>(rgbToYCbCr(getFilterPixel(x - x_h + i, y, image)));
+                    QColor pixel = getFilterPixel(x - x_h + i, y, image);
+                    int intensity;
+                    intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
                     total_x += H_x(i) * intensity;
-                    n += H_x(i);
+                    n += abs(H_x(i));
                 }
-                total_x /= n;
-                auto old_color = rgbToYCbCr(originalImage->pixelColor(x, y));
-                std::get<0>(old_color) = total_x;
-                image->setPixelColor(x, y, yCbCrToRgb(old_color));
+                buffer[x][y] = isDerivationFilter ? total_x : total_x / n;
             });
 
-            // save intermediate values to buffer image
-            QImage *buffer = new QImage(image->copy());
             // apply 1D filter y dimenstion
-            iteratePixels([this, H_x, H_y, x_h, y_h, buffer](int x, int y) {
+            iteratePixels([this, H_x, H_y, y_h, buffer](int x, int y) {
                 double n = 0;
                 double total_y = 0;
                 for (int i = 0; i < H_y.size(); i++)
                 {
-                    int intensity = std::get<0>(rgbToYCbCr(getFilterPixel(x, y - y_h + i, buffer)));
-                    total_y += H_x(i) * intensity;
-                    n += H_y(i);
+                    int intensity;
+                    if (isOutOfRange(x, y, image->width(), image->height()))
+                    {
+                        QColor pixel = getFilterPixel(x, y - y_h + i, image);
+                        intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
+                    }
+                    else
+                    {
+                        intensity = buffer[x][y - y_h + i];
+                    }
+                    total_y += H_y(i) * intensity;
+                    n += abs(H_y(i));
                 }
-                total_y /= n;
-                auto old_color = rgbToYCbCr(image->pixelColor(x, y));
-                std::get<0>(old_color) = total_y;
-                image->setPixelColor(x, y, yCbCrToRgb(old_color));
+                applyFilterValue(total_y, x, y, n, originalImage, image);
             });
-            delete buffer;
         }
         else
         {
             double n = 0.0;
-            iterateRect(filter.rows(), filter.cols(), [this, &filter, &n](int i, int j) {
-                n += filter(i, j);
+            iterateRect(filter.rows(), filter.cols(), [&filter, &n](int x, int y) {
+                n += abs(filter(x, y));
             });
             int x_h = (int)(filter.rows()) / 2;
             int y_h = (int)(filter.cols()) / 2;
-            iteratePixels([this, x_h, y_h, filter, n](int i, int j) {
+            iteratePixels([this, x_h, y_h, filter, n](int x, int y) {
                 double value = 0;
                 for (int u = 0; u < filter.cols(); u++)
                 {
                     for (int v = 0; v < filter.rows(); v++)
                     {
-                        auto yCbCr = rgbToYCbCr(getFilterPixel(i - x_h + u, j - y_h + v, originalImage));
+                        auto yCbCr = rgbToYCbCr(getFilterPixel(x - x_h + u, y - y_h + v, originalImage));
                         value += filter(v, u) * std::get<0>(yCbCr);
                     }
                 }
-                value /= n;
-                auto old_color = rgbToYCbCr(originalImage->pixelColor(i, j));
-                std::get<0>(old_color) = value;
-                image->setPixelColor(i, j, yCbCrToRgb(old_color));
+                applyFilterValue(value, x, y, n, originalImage, image);
             });
         }
 
@@ -605,6 +620,11 @@ QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
     return image->pixelColor(x, y);
 }
 
+bool ImageViewer::isOutOfRange(int x, int y, int width, int height)
+{
+    return x < 0 || y < 0 || x > width - 1 || y > height - 1;
+}
+
 #pragma GCC diagnostic push
 // for common interface these variables are not used
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -655,6 +675,24 @@ QColor ImageViewer::borderMirror(int x, int y, QImage *image)
         y = -y;
     }
     return image->pixelColor(x, y);
+}
+
+void ImageViewer::applyFilterValue(double value, int x, int y, double n, QImage *source, QImage *target)
+{
+    QColor newPixelValue;
+    if (isDerivationFilter)
+    {
+        value = clamp(value + 127, 0, GRAY_SPECTRUM - 1);
+        newPixelValue = QColor(value, value, value);
+    }
+    else
+    {
+        value /= n;
+        auto old_color = rgbToYCbCr(source->pixelColor(x, y));
+        std::get<0>(old_color) = value;
+        newPixelValue = yCbCrToRgb(old_color);
+    }
+    target->setPixelColor(x, y, newPixelValue);
 }
 
 /*
@@ -828,12 +866,17 @@ void ImageViewer::generateControlPanels()
     filterTable = new QTableWidget(DEFAULT_FILTER_SIZE, DEFAULT_FILTER_SIZE);
     setFilterTableWidgets();
 
+    QCheckBox *isDerivationCheckBox = new QCheckBox("Is derivation Filter?");
+    isDerivationCheckBox->setCheckState(DEFAULT_DERIVATION_CHECKBOX);
+    QObject::connect(isDerivationCheckBox, SIGNAL(stateChanged(int)), SLOT(derivationFilterStateChanged(int)));
+
     applyFilterButton = new QPushButton("Apply filter");
     QObject::connect(applyFilterButton, SIGNAL(clicked()), SLOT(applyFilterClicked()));
 
     filterLayout->addLayout(filterMInfo);
     filterLayout->addLayout(filterNInfo);
     filterLayout->addWidget(filterTable);
+    filterLayout->addWidget(isDerivationCheckBox);
     filterLayout->addWidget(applyFilterButton);
     filterGroup->setLayout(filterLayout);
 

@@ -61,6 +61,7 @@ private slots:
     void borderStrategyChangedMirror();
     void applyFilterClicked();
     void applyGaussianFilterClicked();
+    void derivationFilterStateChanged(int state);
 
     void open();
     void print();
@@ -81,6 +82,7 @@ public:
 
     // setters
     void setBorderStrategy(std::function<QColor(int, int, QImage *)> strategy);
+    void setIsDerivationFilter(bool state);
 
     // actions
     void updateImageInformation(QImage *image);
@@ -106,7 +108,9 @@ public:
     QColor yCbCrToRgb(std::tuple<int, int, int> val);
     int clamp(int value, int min, int max);
     Eigen::MatrixXd createGaussianKernel(double sigma);
+    bool isOutOfRange(int x, int y, int width, int height);
     QColor getFilterPixel(int i, int j, QImage *image);
+    void applyFilterValue(double value, int x, int y, double n, QImage *source, QImage *target);
 
     static QColor borderPad(int i, int j, QImage *image);
     static QColor borderConstant(int i, int j, QImage *image);
@@ -150,6 +154,7 @@ private:
     QPushButton *applyFilterButton;
     std::function<QColor(int, int, QImage *)> borderStrategy;
     QSpinBox *sigmaSpinBox;
+    bool isDerivationFilter;
 
     QTabWidget *tabWidget;
     QTabWidget *imageInfo;

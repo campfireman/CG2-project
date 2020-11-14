@@ -66,6 +66,7 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "__nullptr": "cpp",
-        "complex": "cpp"
+        "complex": "cpp",
+        "*.cuh": "cpp"
     }
 }
