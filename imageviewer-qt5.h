@@ -157,6 +157,11 @@ private:
     std::function<QColor(int, int, QImage *)> borderStrategy;
     QDoubleSpinBox *sigmaSpinBox;
     bool isDerivationFilter;
+    QDoubleSpinBox *cannySigmaSpinBox;
+    QDoubleSpinBox *hysteresisTLowSpinBox;
+    QDoubleSpinBox *hysteresisTHighSpinBox;
+    QDoubleSpinBox *usmSigmaSpinBox;
+    QDoubleSpinBox *sharpnessSpinBox;
 
     QTabWidget *tabWidget;
     QTabWidget *imageInfo;

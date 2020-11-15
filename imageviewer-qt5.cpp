@@ -35,11 +35,22 @@ using namespace std;
 #define DEFAULT_FILTER_INPUT 1
 #define DEFAULT_SIGMA_INPUT 1
 #define DEFAULT_DERIVATION_CHECKBOX Qt::Unchecked
+#define DEFAULT_HYSTERESIS_LOW_INPUT 1.0
+#define DEFAULT_HYSTERESIS_HIGH_INPUT 1.0
+#define DEFAULT_SHARPNESS_INPUT 1.0
+
 #define MIN_FILTER_INPUT -100
 #define MIN_SIGMA_INPUT 0.5
+#define MIN_HYSTERESIS_HIGH_INPUT 0.5
+#define MIN_HYSTERESIS_LOW_INPUT 0.5
+#define MIN_SHARPNESS_INPUT 0.2
+
 #define MAX_FILTER_INPUT 100
 #define MAX_SIGMA_INPUT 8.0
 #define MAX_FILTER_SIZE 13
+#define MAX_HYSTERESIS_HIGH_INPUT 5.0
+#define MAX_HYSTERESIS_LOW_INPUT 5.0
+#define MAX_SHARPNESS_INPUT 4.0
 
 #define HIST_SPACING 3
 #define HIST_PADDING 20
@@ -917,6 +928,82 @@ void ImageViewer::generateControlPanels()
     QWidget *m_option_panel4 = new QWidget();
     QVBoxLayout *m_option_layout4 = new QVBoxLayout();
     m_option_panel4->setLayout(m_option_layout4);
+
+    // canny algorithm
+
+    QGroupBox *cannyAlgorithmGroup = new QGroupBox(tr("Canny algorithm"));
+    QVBoxLayout *cannyAlgorithmLayout = new QVBoxLayout;
+
+    QHBoxLayout *cannySigmaLayout = new QHBoxLayout();
+    cannySigmaSpinBox = new QDoubleSpinBox();
+    cannySigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
+    cannySigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
+    cannySigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
+    cannySigmaSpinBox->setSingleStep(0.1);
+    cannySigmaLayout->addWidget(new QLabel("Sigma: "));
+    cannySigmaLayout->addWidget(cannySigmaSpinBox);
+
+    QHBoxLayout *hysteresisTLowLayout = new QHBoxLayout();
+    hysteresisTLowSpinBox = new QDoubleSpinBox();
+    hysteresisTLowSpinBox->setMinimum(MIN_HYSTERESIS_LOW_INPUT);
+    hysteresisTLowSpinBox->setMaximum(MAX_HYSTERESIS_LOW_INPUT);
+    hysteresisTLowSpinBox->setValue(DEFAULT_HYSTERESIS_LOW_INPUT);
+    hysteresisTLowSpinBox->setSingleStep(0.1);
+    hysteresisTLowLayout->addWidget(new QLabel("Hysteresis threshold low: "));
+    hysteresisTLowLayout->addWidget(hysteresisTLowSpinBox);
+
+    QHBoxLayout *hysteresisTHighLayout = new QHBoxLayout();
+    hysteresisTHighSpinBox = new QDoubleSpinBox();
+    hysteresisTHighSpinBox->setMinimum(MIN_HYSTERESIS_HIGH_INPUT);
+    hysteresisTHighSpinBox->setMaximum(MAX_HYSTERESIS_HIGH_INPUT);
+    hysteresisTHighSpinBox->setValue(DEFAULT_HYSTERESIS_HIGH_INPUT);
+    hysteresisTHighSpinBox->setSingleStep(0.1);
+    hysteresisTHighLayout->addWidget(new QLabel("Hysteresis threshold high: "));
+    hysteresisTHighLayout->addWidget(hysteresisTHighSpinBox);
+
+    QPushButton *applyCannyAlgorithmButton = new QPushButton("Apply canny algorithm");
+    QObject::connect(applyCannyAlgorithmButton, SIGNAL(clicked()), SLOT(applyGcannyAlgorithmClicked()));
+
+    cannyAlgorithmLayout->addLayout(cannySigmaLayout);
+    cannyAlgorithmLayout->addLayout(hysteresisTLowLayout);
+    cannyAlgorithmLayout->addLayout(hysteresisTHighLayout);
+    cannyAlgorithmLayout->addWidget(applyCannyAlgorithmButton);
+    cannyAlgorithmGroup->setLayout(cannyAlgorithmLayout);
+
+    // USM algorithm
+
+    QGroupBox *usmAlgorithmGroup = new QGroupBox(tr("USM algorithm"));
+    QVBoxLayout *usmAlgorithmLayout = new QVBoxLayout;
+
+    QHBoxLayout *usmSigmaLayout = new QHBoxLayout();
+    usmSigmaSpinBox = new QDoubleSpinBox();
+    usmSigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
+    usmSigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
+    usmSigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
+    usmSigmaSpinBox->setSingleStep(0.1);
+    usmSigmaLayout->addWidget(new QLabel("Sigma: "));
+    usmSigmaLayout->addWidget(usmSigmaSpinBox);
+
+    QHBoxLayout *sharpnessLayout = new QHBoxLayout();
+    sharpnessSpinBox = new QDoubleSpinBox();
+    sharpnessSpinBox->setMinimum(MIN_SHARPNESS_INPUT);
+    sharpnessSpinBox->setMaximum(MAX_SHARPNESS_INPUT);
+    sharpnessSpinBox->setValue(DEFAULT_SHARPNESS_INPUT);
+    sharpnessSpinBox->setSingleStep(0.1);
+    sharpnessLayout->addWidget(new QLabel("Sharpness a: "));
+    sharpnessLayout->addWidget(sharpnessSpinBox);
+
+    QPushButton *applyUsmAlgorithmButton = new QPushButton("Apply usm algorithm");
+    QObject::connect(applyUsmAlgorithmButton, SIGNAL(clicked()), SLOT(applyGusmAlgorithmClicked()));
+
+    usmAlgorithmLayout->addLayout(usmSigmaLayout);
+    usmAlgorithmLayout->addLayout(sharpnessLayout);
+    usmAlgorithmLayout->addWidget(applyUsmAlgorithmButton);
+    usmAlgorithmGroup->setLayout(usmAlgorithmLayout);
+
+    // add widgets
+    m_option_layout4->addWidget(cannyAlgorithmGroup);
+    m_option_layout4->addWidget(usmAlgorithmGroup);
 
     tabWidget->addTab(m_option_panel4, "4");
 }
