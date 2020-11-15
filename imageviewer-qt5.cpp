@@ -2,17 +2,20 @@
 
 #include <Qt>
 #include <QtWidgets>
+
 #include <QCheckBox>
-#include <QGroupBox>
-#include <QWidget>
-#include <QHBoxLayout>
-#include <QStackedLayout>
-#include <QSlider>
-#include <QSpinBox>
-#include <QTableWidget>
+#include <QDoubleSpinBox>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QGroupBox>
+#include <QHBoxLayout>
 #include <QRect>
+#include <QSlider>
+#include <QSpinBox>
+#include <QStackedLayout>
+#include <QTableWidget>
+#include <QWidget>
+
 #ifndef QT_NO_PRINTER
 #include <QPrintDialog>
 #endif
@@ -33,9 +36,9 @@ using namespace std;
 #define DEFAULT_SIGMA_INPUT 1
 #define DEFAULT_DERIVATION_CHECKBOX Qt::Unchecked
 #define MIN_FILTER_INPUT -100
-#define MIN_SIGMA_INPUT 1
+#define MIN_SIGMA_INPUT 0.5
 #define MAX_FILTER_INPUT 100
-#define MAX_SIGMA_INPUT 10
+#define MAX_SIGMA_INPUT 8.0
 #define MAX_FILTER_SIZE 13
 
 #define HIST_SPACING 3
@@ -884,10 +887,11 @@ void ImageViewer::generateControlPanels()
     QVBoxLayout *gaussianFilterLayout = new QVBoxLayout;
 
     QHBoxLayout *sigmaLayout = new QHBoxLayout();
-    sigmaSpinBox = new QSpinBox();
+    sigmaSpinBox = new QDoubleSpinBox();
     sigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
     sigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
     sigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
+    sigmaSpinBox->setSingleStep(0.1);
     sigmaLayout->addWidget(new QLabel("Sigma: "));
     sigmaLayout->addWidget(sigmaSpinBox);
 

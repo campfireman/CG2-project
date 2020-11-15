@@ -22,7 +22,9 @@ using namespace Eigen;
 #include <functional>
 #include <tuple>
 #include <vector>
+
 class QAction;
+class QDoubleSpinBox;
 class QGraphicsScene;
 class QGraphicsView;
 class QLabel;
@@ -153,7 +155,7 @@ private:
     std::vector<std::vector<int>> *filter;
     QPushButton *applyFilterButton;
     std::function<QColor(int, int, QImage *)> borderStrategy;
-    QSpinBox *sigmaSpinBox;
+    QDoubleSpinBox *sigmaSpinBox;
     bool isDerivationFilter;
 
     QTabWidget *tabWidget;
