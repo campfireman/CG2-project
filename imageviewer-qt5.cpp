@@ -454,18 +454,15 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             logFile << "H_y:" << endl
                     << H_y << endl;
 
-            // reset image so filter don't stack
-            resetImage();
-
             std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
 
             // apply 1D filter x dimenstion
-            iteratePixels([this, H_x, H_y, x_h, &buffer](int x, int y) {
+            iteratePixels([this, H_x, x_h, &buffer](int x, int y) {
                 double total_x = 0;
                 double n = 0;
                 for (int i = 0; i < H_x.size(); i++)
                 {
-                    QColor pixel = getFilterPixel(x - x_h + i, y, image);
+                    QColor pixel = getFilterPixel(x - x_h + i, y, originalImage);
                     int intensity;
                     intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
                     total_x += H_x(i) * intensity;
@@ -475,20 +472,21 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             });
 
             // apply 1D filter y dimenstion
-            iteratePixels([this, H_x, H_y, y_h, buffer](int x, int y) {
+            iteratePixels([this, H_y, y_h, buffer](int x, int y) {
                 double n = 0;
                 double total_y = 0;
                 for (int i = 0; i < H_y.size(); i++)
                 {
                     int intensity;
-                    if (isOutOfRange(x, y, image->width(), image->height()))
+                    int y_pos = y - y_h + i;
+                    if (isOutOfRange(x, y_pos, image->width(), image->height()))
                     {
-                        QColor pixel = getFilterPixel(x, y - y_h + i, image);
+                        QColor pixel = borderStrategy(x, y_pos, originalImage);
                         intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
                     }
                     else
                     {
-                        intensity = buffer[x][y - y_h + i];
+                        intensity = buffer[x][y_pos];
                     }
                     total_y += H_y(i) * intensity;
                     n += abs(H_y(i));
@@ -613,7 +611,7 @@ Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
 
 QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)
 {
-    if (x < 0 || y < 0 || x > image->width() - 1 || y > image->height() - 1)
+    if (isOutOfRange(x, y, image->width(), image->height()))
     {
         return borderStrategy(x, y, image);
     }
