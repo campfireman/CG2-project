@@ -64,6 +64,8 @@ private slots:
     void applyFilterClicked();
     void applyGaussianFilterClicked();
     void derivationFilterStateChanged(int state);
+    void applyCannyAlgorithmClicked();
+    void applyUsmAlgorithmClicked();
 
     void open();
     void print();
@@ -98,6 +100,8 @@ public:
     void setFilterTableWidgets();
     void applyFilter(Eigen::MatrixXd filter);
     void createHistogram(QImage *image, int *hist);
+    void applyCannyAlgorithm();
+    void applyUsmAlgorithm();
 
     // helpers
     int rgbToGray(int red, int green, int blue);

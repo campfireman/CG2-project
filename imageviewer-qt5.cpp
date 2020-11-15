@@ -179,6 +179,14 @@ void ImageViewer::derivationFilterStateChanged(int state)
     setIsDerivationFilter(state == Qt::Checked);
 }
 
+void ImageViewer::applyCannyAlgorithmClicked()
+{
+    applyCannyAlgorithm();
+}
+void ImageViewer::applyUsmAlgorithmClicked()
+{
+    applyUsmAlgorithm();
+}
 /*
  * PUBLIC
  */
@@ -532,6 +540,18 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 
         emit imageUpdated(image);
     }
+}
+
+void ImageViewer::applyCannyAlgorithm()
+{
+    double sigma = cannySigmaSpinBox->value();
+    double tLow = hysteresisTLowSpinBox->value();
+    double tHigh = hysteresisTHighSpinBox->value();
+
+    cout << sigma << tLow << tHigh << endl;
+}
+void ImageViewer::applyUsmAlgorithm()
+{
 }
 
 // helpers
@@ -962,7 +982,7 @@ void ImageViewer::generateControlPanels()
     hysteresisTHighLayout->addWidget(hysteresisTHighSpinBox);
 
     QPushButton *applyCannyAlgorithmButton = new QPushButton("Apply canny algorithm");
-    QObject::connect(applyCannyAlgorithmButton, SIGNAL(clicked()), SLOT(applyGcannyAlgorithmClicked()));
+    QObject::connect(applyCannyAlgorithmButton, SIGNAL(clicked()), SLOT(applyCannyAlgorithmClicked()));
 
     cannyAlgorithmLayout->addLayout(cannySigmaLayout);
     cannyAlgorithmLayout->addLayout(hysteresisTLowLayout);
@@ -994,7 +1014,7 @@ void ImageViewer::generateControlPanels()
     sharpnessLayout->addWidget(sharpnessSpinBox);
 
     QPushButton *applyUsmAlgorithmButton = new QPushButton("Apply usm algorithm");
-    QObject::connect(applyUsmAlgorithmButton, SIGNAL(clicked()), SLOT(applyGusmAlgorithmClicked()));
+    QObject::connect(applyUsmAlgorithmButton, SIGNAL(clicked()), SLOT(applyUsmAlgorithmClicked()));
 
     usmAlgorithmLayout->addLayout(usmSigmaLayout);
     usmAlgorithmLayout->addLayout(sharpnessLayout);
