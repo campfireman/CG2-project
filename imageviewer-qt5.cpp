@@ -35,21 +35,22 @@ using namespace std;
 #define DEFAULT_FILTER_INPUT 1
 #define DEFAULT_SIGMA_INPUT 1
 #define DEFAULT_DERIVATION_CHECKBOX Qt::Unchecked
-#define DEFAULT_HYSTERESIS_LOW_INPUT 1.0
-#define DEFAULT_HYSTERESIS_HIGH_INPUT 1.0
+#define DEFAULT_CANNY_SIGMA_INPUT 1.4
+#define DEFAULT_HYSTERESIS_LOW_INPUT 1.5
+#define DEFAULT_HYSTERESIS_HIGH_INPUT 3.0
 #define DEFAULT_SHARPNESS_INPUT 1.0
 
 #define MIN_FILTER_INPUT -100
 #define MIN_SIGMA_INPUT 0.5
-#define MIN_HYSTERESIS_HIGH_INPUT 0.5
-#define MIN_HYSTERESIS_LOW_INPUT 0.5
+#define MIN_HYSTERESIS_LOW_INPUT 0.1
+#define MIN_HYSTERESIS_HIGH_INPUT 0.2
 #define MIN_SHARPNESS_INPUT 0.2
 
 #define MAX_FILTER_INPUT 100
 #define MAX_SIGMA_INPUT 8.0
 #define MAX_FILTER_SIZE 13
-#define MAX_HYSTERESIS_HIGH_INPUT 5.0
-#define MAX_HYSTERESIS_LOW_INPUT 5.0
+#define MAX_HYSTERESIS_LOW_INPUT 9.0
+#define MAX_HYSTERESIS_HIGH_INPUT 10.0
 #define MAX_SHARPNESS_INPUT 4.0
 
 #define HIST_SPACING 3
@@ -449,29 +450,52 @@ void ImageViewer::setFilterTableWidgets()
     });
 }
 
-void ImageViewer::applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y, QImage *source, QImage *target)
+void ImageViewer::apply1DXFilter(QImage *source, Eigen::VectorXd H_x, std::function<void(int, int, double, double)> func)
 {
-    std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
-    int x_h = (int)(H_x.size()) / 2;
-    int y_h = (int)(H_y.size()) / 2;
-
-    // apply 1D filter x dimenstion
-    iteratePixels([this, source, H_x, x_h, &buffer](int x, int y) {
+    iteratePixels([this, source, H_x, func](int x, int y) {
+        int x_h = (int)(H_x.size()) / 2;
         double total_x = 0;
         double n = 0;
         for (int i = 0; i < H_x.size(); i++)
         {
             QColor pixel = getFilterPixel(x - x_h + i, y, source);
-            int intensity;
-            intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
+            int intensity = rgbToGray(pixel);
             total_x += H_x(i) * intensity;
             n += abs(H_x(i));
         }
-        buffer[x][y] = isDerivationFilter ? total_x : total_x / n;
+        func(x, y, total_x, n);
+    });
+}
+
+void ImageViewer::apply1DYFilter(QImage *source, Eigen::VectorXd H_y, std::function<void(int, int, double, double)> func)
+{
+    iteratePixels([this, source, H_y, func](int x, int y) {
+        int y_h = (int)(H_y.size()) / 2;
+        double total_y = 0;
+        double n = 0;
+        for (int i = 0; i < H_y.size(); i++)
+        {
+            int y_pos = y - y_h + i;
+            QColor pixel = getFilterPixel(x, y_pos, source);
+            int intensity = rgbToGray(pixel);
+            total_y += H_y(i) * intensity;
+            n += abs(H_y(i));
+        }
+        func(x, y, total_y, n);
+    });
+}
+void ImageViewer::applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y, QImage *source, QImage *target)
+{
+    std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
+
+    // apply 1D filter x dimenstion
+    apply1DXFilter(source, H_x, [this, &buffer](int x, int y, double value, double n) {
+        buffer[x][y] = isDerivationFilter ? value : value / n;
     });
 
     // apply 1D filter y dimenstion
-    iteratePixels([this, source, target, H_y, y_h, buffer](int x, int y) {
+    iteratePixels([this, source, target, H_y, buffer](int x, int y) {
+        int y_h = (int)(H_y.size()) / 2;
         double n = 0;
         double total_y = 0;
         for (int i = 0; i < H_y.size(); i++)
@@ -481,7 +505,7 @@ void ImageViewer::applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y,
             if (isOutOfRange(x, y_pos, source->width(), source->height()))
             {
                 QColor pixel = borderStrategy(x, y_pos, source);
-                intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
+                intensity = rgbToGray(pixel);
             }
             else
             {
@@ -554,13 +578,152 @@ void ImageViewer::applyGaussianFilter(double sigma, QImage *source, QImage *targ
     emit imageUpdated(target);
 }
 
+int ImageViewer::getOrientationSector(double d_x, double d_y)
+{
+    double pi_8 = M_PI / 8.0;
+    double _d_x = cos(pi_8) * d_x - sin(pi_8) * d_y;
+    double _d_y = sin(pi_8) * d_x + cos(pi_8) * d_y;
+
+    if (_d_y < 0)
+    {
+        _d_x = -_d_x;
+        _d_y = -_d_y;
+    }
+    if (_d_x >= 0 && _d_x >= _d_y)
+    {
+        return 0;
+    }
+    else if (_d_x >= 0 && _d_x < _d_y)
+    {
+        return 1;
+    }
+    else if (_d_x < 0 && -_d_x < _d_y)
+    {
+        return 2;
+    }
+    else
+    {
+        return 3;
+    }
+}
+
+bool ImageViewer::isLocalMax(std::vector<std::vector<double>> E_mag, int x, int y, int s_0, double t_low)
+{
+    double m_c = E_mag[x][y];
+    if (m_c < t_low)
+    {
+        return false;
+    }
+    double m_L;
+    double m_R;
+
+    switch (s_0)
+    {
+    case 0:
+        m_L = E_mag[x - 1][y];
+        m_R = E_mag[x + 1][y];
+        break;
+    case 1:
+        m_L = E_mag[x - 1][y - 1];
+        m_R = E_mag[x + 1][y + 1];
+        break;
+    case 2:
+        m_L = E_mag[x][y - 1];
+        m_R = E_mag[x][y - 1];
+        break;
+    case 3:
+        m_L = E_mag[x - 1][y + 1];
+        m_R = E_mag[x + 1][y - 1];
+        break;
+    }
+    return m_L <= m_c && m_c >= m_R;
+}
+
+void ImageViewer::traceAndThreshold(std::vector<std::vector<double>> &E_nms, std::vector<std::vector<bool>> &E_bin, int x_0, int y_0, double t_low)
+{
+    int M = E_bin[0].size();
+    int N = E_bin.size();
+
+    E_bin[x_0][y_0] = true;
+    int x_L = max(x_0 - 1, 0);
+    int x_R = max(x_0 + 1, N - 1);
+    int y_L = max(y_0 - 1, 0);
+    int y_R = max(y_0 + 1, M - 1);
+
+    for (auto &x : std::vector<int>{x_L, x_0, x_R})
+    {
+        for (auto &y : std::vector<int>{y_L, y_0, y_R})
+        {
+            if (E_nms[x][y] >= t_low && E_bin[x][y] == 0)
+            {
+                traceAndThreshold(E_nms, E_bin, x, y, t_low);
+            }
+        }
+    }
+    return;
+}
+
 void ImageViewer::applyCannyAlgorithm()
 {
+    if (!imageIsLoaded())
+    {
+        return;
+    }
     double sigma = cannySigmaSpinBox->value();
-    double tLow = hysteresisTLowSpinBox->value();
-    double tHigh = hysteresisTHighSpinBox->value();
+    double t_low = hysteresisTLowSpinBox->value();
+    double t_high = hysteresisTHighSpinBox->value();
+    std::vector<std::vector<double>> I_x(image->width(), std::vector<double>(image->height(), 0));
+    std::vector<std::vector<double>> I_y(image->width(), std::vector<double>(image->height(), 0));
+    std::vector<std::vector<double>> E_mag(image->width(), std::vector<double>(image->height(), 0));
+    std::vector<std::vector<double>> E_nms(image->width(), std::vector<double>(image->height(), 0));
+    std::vector<std::vector<bool>> E_bin(image->width(), std::vector<bool>(image->height(), false));
 
     applyGaussianFilter(sigma, originalImage, image);
+    Eigen::VectorXd gradient(3);
+    gradient[0] = -0.5;
+    gradient[1] = 0;
+    gradient[2] = 0.5;
+
+    apply1DXFilter(image, gradient, [&I_x](int x, int y, double value, double n) {
+        I_x[x][y] = value;
+    });
+    apply1DYFilter(image, gradient, [&I_y](int x, int y, double value, double n) {
+        I_y[x][y] = value;
+    });
+
+    iteratePixels([I_x, I_y, &E_mag](int x, int y) {
+        E_mag[x][y] = sqrt(pow(I_x[x][y], 2) + pow(I_y[x][y], 2));
+    });
+
+    for (int x = 1; x < image->width() - 1; x++)
+    {
+        for (int y = 1; y < image->height() - 1; y++)
+        {
+            double d_x = I_x[x][y];
+            double d_y = I_y[x][y];
+            int s_0 = getOrientationSector(d_x, d_y);
+
+            if (isLocalMax(E_mag, x, y, s_0, t_low))
+            {
+                E_nms[x][y] = E_mag[x][y];
+            }
+        }
+    }
+    for (int x = 1; x < image->width() - 1; x++)
+    {
+        for (int y = 1; y < image->height() - 1; y++)
+        {
+            if (E_nms[x][y] >= t_high && E_bin[x][y] == false)
+            {
+                traceAndThreshold(E_nms, E_bin, x, y, t_low);
+            }
+        }
+    }
+    iteratePixels([this, E_bin](int x, int y) {
+        QColor color = E_bin[x][y] ? QColor(255, 255, 255) : QColor(0, 0, 0);
+        image->setPixelColor(x, y, color);
+    });
+    emit imageUpdated(image);
 }
 void ImageViewer::applyUsmAlgorithm()
 {
@@ -970,7 +1133,7 @@ void ImageViewer::generateControlPanels()
     cannySigmaSpinBox = new QDoubleSpinBox();
     cannySigmaSpinBox->setMinimum(MIN_SIGMA_INPUT);
     cannySigmaSpinBox->setMaximum(MAX_SIGMA_INPUT);
-    cannySigmaSpinBox->setValue(DEFAULT_SIGMA_INPUT);
+    cannySigmaSpinBox->setValue(DEFAULT_CANNY_SIGMA_INPUT);
     cannySigmaSpinBox->setSingleStep(0.1);
     cannySigmaLayout->addWidget(new QLabel("Sigma: "));
     cannySigmaLayout->addWidget(cannySigmaSpinBox);

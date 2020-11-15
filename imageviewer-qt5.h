@@ -98,10 +98,15 @@ public:
     void changeFilterTableWidth(int value);
     void changeFilterTableHeight(int value);
     void setFilterTableWidgets();
+    void apply1DXFilter(QImage *source, Eigen::VectorXd H_x, std::function<void(int, int, double, double)> func);
+    void apply1DYFilter(QImage *source, Eigen::VectorXd H_y, std::function<void(int, int, double, double)> func);
     void applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y, QImage *source, QImage *target);
     void applyFilter(Eigen::MatrixXd filter);
     void applyGaussianFilter(double sigma, QImage *source, QImage *target);
     void createHistogram(QImage *image, int *hist);
+    int getOrientationSector(double d_x, double d_y);
+    bool isLocalMax(std::vector<std::vector<double>> E_mag, int x, int y, int s_0, double t_low);
+    void traceAndThreshold(std::vector<std::vector<double>> &E_nms, std::vector<std::vector<bool>> &E_bin, int x, int y, double t_low);
     void applyCannyAlgorithm();
     void applyUsmAlgorithm();
 
