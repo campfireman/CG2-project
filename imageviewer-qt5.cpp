@@ -171,7 +171,7 @@ void ImageViewer::applyFilterClicked()
 
 void ImageViewer::applyGaussianFilterClicked()
 {
-    applyFilter(createGaussianKernel(sigmaSpinBox->value()));
+    applyGaussianFilter(sigmaSpinBox->value(), originalImage, image);
 }
 
 void ImageViewer::derivationFilterStateChanged(int state)
@@ -449,6 +449,51 @@ void ImageViewer::setFilterTableWidgets()
     });
 }
 
+void ImageViewer::applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y, QImage *source, QImage *target)
+{
+    std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
+    int x_h = (int)(H_x.size()) / 2;
+    int y_h = (int)(H_y.size()) / 2;
+
+    // apply 1D filter x dimenstion
+    iteratePixels([this, source, H_x, x_h, &buffer](int x, int y) {
+        double total_x = 0;
+        double n = 0;
+        for (int i = 0; i < H_x.size(); i++)
+        {
+            QColor pixel = getFilterPixel(x - x_h + i, y, source);
+            int intensity;
+            intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
+            total_x += H_x(i) * intensity;
+            n += abs(H_x(i));
+        }
+        buffer[x][y] = isDerivationFilter ? total_x : total_x / n;
+    });
+
+    // apply 1D filter y dimenstion
+    iteratePixels([this, source, target, H_y, y_h, buffer](int x, int y) {
+        double n = 0;
+        double total_y = 0;
+        for (int i = 0; i < H_y.size(); i++)
+        {
+            int intensity;
+            int y_pos = y - y_h + i;
+            if (isOutOfRange(x, y_pos, source->width(), source->height()))
+            {
+                QColor pixel = borderStrategy(x, y_pos, source);
+                intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
+            }
+            else
+            {
+                intensity = buffer[x][y_pos];
+            }
+            total_y += H_y(i) * intensity;
+            n += abs(H_y(i));
+        }
+        applyFilterValue(total_y, x, y, n, source, target);
+    });
+}
+
 void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 {
 
@@ -468,53 +513,12 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
             // thanks to https://web.archive.org/web/20200804115435/https://bartwronski.com/2020/02/03/separate-your-filters-svd-and-low-rank-approximation-of-image-filters/
             VectorXd H_x = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             VectorXd H_y = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
-            int x_h = (int)(H_x.size()) / 2;
-            int y_h = (int)(H_y.size()) / 2;
             logFile << "Filter is separable!" << std::endl;
             logFile << "H_x:" << endl
                     << H_x << endl;
             logFile << "H_y:" << endl
                     << H_y << endl;
-
-            std::vector<std::vector<double>> buffer(image->width(), std::vector<double>(image->height(), 0));
-
-            // apply 1D filter x dimenstion
-            iteratePixels([this, H_x, x_h, &buffer](int x, int y) {
-                double total_x = 0;
-                double n = 0;
-                for (int i = 0; i < H_x.size(); i++)
-                {
-                    QColor pixel = getFilterPixel(x - x_h + i, y, originalImage);
-                    int intensity;
-                    intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
-                    total_x += H_x(i) * intensity;
-                    n += abs(H_x(i));
-                }
-                buffer[x][y] = isDerivationFilter ? total_x : total_x / n;
-            });
-
-            // apply 1D filter y dimenstion
-            iteratePixels([this, H_y, y_h, buffer](int x, int y) {
-                double n = 0;
-                double total_y = 0;
-                for (int i = 0; i < H_y.size(); i++)
-                {
-                    int intensity;
-                    int y_pos = y - y_h + i;
-                    if (isOutOfRange(x, y_pos, image->width(), image->height()))
-                    {
-                        QColor pixel = borderStrategy(x, y_pos, originalImage);
-                        intensity = isDerivationFilter ? rgbToGray(pixel) : std::get<0>(rgbToYCbCr(pixel));
-                    }
-                    else
-                    {
-                        intensity = buffer[x][y_pos];
-                    }
-                    total_y += H_y(i) * intensity;
-                    n += abs(H_y(i));
-                }
-                applyFilterValue(total_y, x, y, n, originalImage, image);
-            });
+            applySeparatedFilter(H_x, H_y, originalImage, image);
         }
         else
         {
@@ -542,13 +546,21 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
     }
 }
 
+void ImageViewer::applyGaussianFilter(double sigma, QImage *source, QImage *target)
+{
+    Eigen::VectorXd kernel = createGaussianKernel(sigma);
+    applySeparatedFilter(kernel, kernel, source, target);
+    logFile << "Applied gaussian filter with sigma = " << sigma << endl;
+    emit imageUpdated(target);
+}
+
 void ImageViewer::applyCannyAlgorithm()
 {
     double sigma = cannySigmaSpinBox->value();
     double tLow = hysteresisTLowSpinBox->value();
     double tHigh = hysteresisTHighSpinBox->value();
 
-    cout << sigma << tLow << tHigh << endl;
+    applyGaussianFilter(sigma, originalImage, image);
 }
 void ImageViewer::applyUsmAlgorithm()
 {
@@ -630,7 +642,7 @@ int ImageViewer::clamp(int value, int min, int max)
     return value;
 }
 
-Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
+Eigen::VectorXd ImageViewer::createGaussianKernel(double sigma)
 {
     int center = (int)(sigma * 3.0);
     Eigen::VectorXd h = Eigen::VectorXd(2 * center + 1);
@@ -640,7 +652,7 @@ Eigen::MatrixXd ImageViewer::createGaussianKernel(double sigma)
         double r = center - i;
         h[i] = (double)(exp(-0.5 * (r * r) / sigma2));
     }
-    return h * h.transpose();
+    return h;
 }
 
 QColor ImageViewer::getFilterPixel(int x, int y, QImage *image)

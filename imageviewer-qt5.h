@@ -98,7 +98,9 @@ public:
     void changeFilterTableWidth(int value);
     void changeFilterTableHeight(int value);
     void setFilterTableWidgets();
+    void applySeparatedFilter(Eigen::VectorXd H_x, Eigen::VectorXd H_y, QImage *source, QImage *target);
     void applyFilter(Eigen::MatrixXd filter);
+    void applyGaussianFilter(double sigma, QImage *source, QImage *target);
     void createHistogram(QImage *image, int *hist);
     void applyCannyAlgorithm();
     void applyUsmAlgorithm();
@@ -113,7 +115,7 @@ public:
     std::tuple<int, int, int> rgbToYCbCr(QColor rgb);
     QColor yCbCrToRgb(std::tuple<int, int, int> val);
     int clamp(int value, int min, int max);
-    Eigen::MatrixXd createGaussianKernel(double sigma);
+    Eigen::VectorXd createGaussianKernel(double sigma);
     bool isOutOfRange(int x, int y, int width, int height);
     QColor getFilterPixel(int i, int j, QImage *image);
     void applyFilterValue(double value, int x, int y, double n, QImage *source, QImage *target);
