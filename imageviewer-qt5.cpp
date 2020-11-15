@@ -919,18 +919,6 @@ void ImageViewer::generateControlPanels()
     m_option_panel4->setLayout(m_option_layout4);
 
     tabWidget->addTab(m_option_panel4, "4");
-
-    /*
-     * ex 5
-     */
-
-    QWidget *m_option_panel5 = new QWidget();
-    QVBoxLayout *m_option_layout5 = new QVBoxLayout();
-    m_option_panel5->setLayout(m_option_layout5);
-
-    tabWidget->addTab(m_option_panel5, "5");
-
-    tabWidget->show();
 }
 
 /**************************************************************************************** 
