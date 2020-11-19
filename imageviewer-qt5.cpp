@@ -578,7 +578,7 @@ void ImageViewer::applyGaussianFilter(double sigma, QImage *source, QImage *targ
     emit imageUpdated(target);
 }
 
-int ImageViewer::getOrientationSector(double d_x, double d_y)
+int ImageViewer::getOrientationSector(double &d_x, double &d_y)
 {
     double pi_8 = M_PI / 8.0;
     double _d_x = cos(pi_8) * d_x - sin(pi_8) * d_y;
@@ -607,7 +607,7 @@ int ImageViewer::getOrientationSector(double d_x, double d_y)
     }
 }
 
-bool ImageViewer::isLocalMax(std::vector<std::vector<double>> E_mag, int x, int y, int s_0, double t_low)
+bool ImageViewer::isLocalMax(std::vector<std::vector<double>> &E_mag, int &x, int &y, int &s_0, double &t_low)
 {
     double m_c = E_mag[x][y];
     if (m_c < t_low)
@@ -639,7 +639,7 @@ bool ImageViewer::isLocalMax(std::vector<std::vector<double>> E_mag, int x, int 
     return m_L <= m_c && m_c >= m_R;
 }
 
-void ImageViewer::traceAndThreshold(std::vector<std::vector<double>> &E_nms, std::vector<std::vector<bool>> &E_bin, int x_0, int y_0, double t_low)
+void ImageViewer::traceAndThreshold(std::vector<std::vector<double>> &E_nms, std::vector<std::vector<bool>> &E_bin, int &x_0, int &y_0, double &t_low)
 {
     int M = E_bin[0].size();
     int N = E_bin.size();
