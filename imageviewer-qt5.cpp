@@ -727,6 +727,23 @@ void ImageViewer::applyCannyAlgorithm()
 }
 void ImageViewer::applyUsmAlgorithm()
 {
+    double sigma = usmSigmaSpinBox->value();
+    double sharpness = sharpnessSpinBox->value();
+    std::vector<std::vector<int>> M(image->width(), std::vector<int>(image->height(), 0));
+
+    Eigen::VectorXd kernel = createGaussianKernel(sigma);
+    applySeparatedFilter(kernel, kernel, originalImage, image);
+
+    iteratePixels([this, &M](int x, int y) {
+        M[x][y] = rgbToGray(originalImage->pixelColor(x, y)) - rgbToGray(image->pixelColor(x, y));
+    });
+    iteratePixels([this, M, sharpness](int x, int y) {
+        auto color = rgbToYCbCr(originalImage->pixelColor(x, y));
+        std::get<0>(color) = std::get<0>(color) + sharpness * M[x][y];
+        image->setPixelColor(x, y, yCbCrToRgb(color));
+    });
+    logFile << "Applied USM Algorithm with sigma = " << sigma << " and sharpness " << sharpness << std::endl;
+    emit imageUpdated(image);
 }
 
 // helpers
