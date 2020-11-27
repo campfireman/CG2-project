@@ -398,7 +398,7 @@ void ImageViewer::changeRobustContrast(int value)
         int n_a_high = MN * (1 - factor);
         int a_low;
         int a_high;
-        int sum;
+        int sum = 0;
         bool seenLow = false;
         bool seenHigh = false;
         for (int a = 0; a < GRAY_SPECTRUM; a++)
@@ -427,17 +427,17 @@ void ImageViewer::changeRobustContrast(int value)
             int intensity = std::get<0>(color);
             if (intensity <= a_low)
             {
-                intensity = 0;
+                intensity = a_min;
             }
             else if (intensity >= a_high)
             {
-                intensity = 255;
+                intensity = a_max;
             }
             else
             {
                 intensity = a_min + (intensity - a_low) * ratio;
             }
-            std::get<0>(color) = clamp(intensity, 0, 255);
+            std::get<0>(color) = intensity;
             image->setPixelColor(i, j, yCbCrToRgb(color));
         });
         logFile << "changed robust contrast with percentage of " << factor << std::endl;
