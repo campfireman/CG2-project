@@ -124,6 +124,8 @@ public:
     bool isOutOfRange(int x, int y, int width, int height);
     QColor getFilterPixel(int i, int j, QImage *image);
     void applyFilterValue(double value, int x, int y, double n, QImage *source, QImage *target);
+    void gradient(std::vector<std::vector<double>> &E_mag);
+    void calculateGradient(std::vector<std::vector<double>> &I_x, std::vector<std::vector<double>> &I_y, std::vector<std::vector<double>> &E_mag);
 
     static QColor borderPad(int i, int j, QImage *image);
     static QColor borderConstant(int i, int j, QImage *image);
@@ -173,6 +175,7 @@ private:
     QDoubleSpinBox *hysteresisTHighSpinBox;
     QDoubleSpinBox *usmSigmaSpinBox;
     QDoubleSpinBox *sharpnessSpinBox;
+    QDoubleSpinBox *tCSpinBox;
 
     QTabWidget *tabWidget;
     QTabWidget *imageInfo;

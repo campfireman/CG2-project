@@ -39,12 +39,14 @@ using namespace std;
 #define DEFAULT_HYSTERESIS_LOW_INPUT 1.5
 #define DEFAULT_HYSTERESIS_HIGH_INPUT 3.0
 #define DEFAULT_SHARPNESS_INPUT 1.0
+#define DEFAULT_TC_INPUT 2.0
 
 #define MIN_FILTER_INPUT -100
 #define MIN_SIGMA_INPUT 0.5
 #define MIN_HYSTERESIS_LOW_INPUT 0.1
 #define MIN_HYSTERESIS_HIGH_INPUT 0.2
 #define MIN_SHARPNESS_INPUT 0.2
+#define MIN_TC_INPUT 0.2
 
 #define MAX_FILTER_INPUT 100
 #define MAX_SIGMA_INPUT 8.0
@@ -52,6 +54,7 @@ using namespace std;
 #define MAX_HYSTERESIS_LOW_INPUT 9.0
 #define MAX_HYSTERESIS_HIGH_INPUT 10.0
 #define MAX_SHARPNESS_INPUT 4.0
+#define MAX_TC_INPUT 10.0
 
 #define HIST_SPACING 3
 #define HIST_PADDING 20
@@ -697,21 +700,7 @@ void ImageViewer::applyCannyAlgorithm()
     std::vector<std::vector<bool>> E_bin(image->width(), std::vector<bool>(image->height(), false));
 
     applyGaussianFilter(sigma, originalImage, image);
-    Eigen::VectorXd gradient(3);
-    gradient[0] = -0.5;
-    gradient[1] = 0;
-    gradient[2] = 0.5;
-
-    apply1DXFilter(image, gradient, [&I_x](int x, int y, double value, double n) {
-        I_x[x][y] = value;
-    });
-    apply1DYFilter(image, gradient, [&I_y](int x, int y, double value, double n) {
-        I_y[x][y] = value;
-    });
-
-    iteratePixels([I_x, I_y, &E_mag](int x, int y) {
-        E_mag[x][y] = sqrt(pow(I_x[x][y], 2) + pow(I_y[x][y], 2));
-    });
+    calculateGradient(I_x, I_y, E_mag);
 
     for (int x = 1; x < image->width() - 1; x++)
     {
@@ -747,6 +736,7 @@ void ImageViewer::applyUsmAlgorithm()
 {
     double sigma = usmSigmaSpinBox->value();
     double sharpness = sharpnessSpinBox->value();
+    double t_c = tCSpinBox->value();
     std::vector<std::vector<int>> M(image->width(), std::vector<int>(image->height(), 0));
 
     Eigen::VectorXd kernel = createGaussianKernel(sigma);
@@ -755,9 +745,15 @@ void ImageViewer::applyUsmAlgorithm()
     iteratePixels([this, &M](int x, int y) {
         M[x][y] = rgbToGray(originalImage->pixelColor(x, y)) - rgbToGray(image->pixelColor(x, y));
     });
-    iteratePixels([this, M, sharpness](int x, int y) {
+    std::vector<std::vector<double>> E_mag(image->width(), std::vector<double>(image->height(), 0));
+    gradient(E_mag);
+
+    iteratePixels([this, M, sharpness, E_mag, t_c](int x, int y) {
         auto color = rgbToYCbCr(originalImage->pixelColor(x, y));
-        std::get<0>(color) = std::get<0>(color) + sharpness * M[x][y];
+        if (E_mag[x][y] > t_c)
+        {
+            std::get<0>(color) = std::get<0>(color) + sharpness * M[x][y];
+        }
         image->setPixelColor(x, y, yCbCrToRgb(color));
     });
     logFile << "Applied USM Algorithm with sigma = " << sigma << " and sharpness " << sharpness << std::endl;
@@ -935,6 +931,32 @@ void ImageViewer::applyFilterValue(double value, int x, int y, double n, QImage 
         newPixelValue = yCbCrToRgb(old_color);
     }
     target->setPixelColor(x, y, newPixelValue);
+}
+
+void ImageViewer::gradient(std::vector<std::vector<double>> &E_mag)
+{
+    std::vector<std::vector<double>> I_x(image->width(), std::vector<double>(image->height(), 0));
+    std::vector<std::vector<double>> I_y(image->width(), std::vector<double>(image->height(), 0));
+    calculateGradient(I_x, I_y, E_mag);
+}
+
+void ImageViewer::calculateGradient(std::vector<std::vector<double>> &I_x, std::vector<std::vector<double>> &I_y, std::vector<std::vector<double>> &E_mag)
+{
+    Eigen::VectorXd gradient(3);
+    gradient[0] = -0.5;
+    gradient[1] = 0;
+    gradient[2] = 0.5;
+
+    apply1DXFilter(image, gradient, [&I_x](int x, int y, double value, double n) {
+        I_x[x][y] = value;
+    });
+    apply1DYFilter(image, gradient, [&I_y](int x, int y, double value, double n) {
+        I_y[x][y] = value;
+    });
+
+    iteratePixels([I_x, I_y, &E_mag](int x, int y) {
+        E_mag[x][y] = sqrt(pow(I_x[x][y], 2) + pow(I_y[x][y], 2));
+    });
 }
 
 /*
@@ -1223,11 +1245,21 @@ void ImageViewer::generateControlPanels()
     sharpnessLayout->addWidget(new QLabel("Sharpness a: "));
     sharpnessLayout->addWidget(sharpnessSpinBox);
 
+    QHBoxLayout *tCLayout = new QHBoxLayout();
+    tCSpinBox = new QDoubleSpinBox();
+    tCSpinBox->setMinimum(MIN_TC_INPUT);
+    tCSpinBox->setMaximum(MAX_TC_INPUT);
+    tCSpinBox->setValue(DEFAULT_TC_INPUT);
+    tCSpinBox->setSingleStep(0.1);
+    tCLayout->addWidget(new QLabel("Minimum value gradient (t_c): "));
+    tCLayout->addWidget(tCSpinBox);
+
     QPushButton *applyUsmAlgorithmButton = new QPushButton("Apply usm algorithm");
     QObject::connect(applyUsmAlgorithmButton, SIGNAL(clicked()), SLOT(applyUsmAlgorithmClicked()));
 
     usmAlgorithmLayout->addLayout(usmSigmaLayout);
     usmAlgorithmLayout->addLayout(sharpnessLayout);
+    usmAlgorithmLayout->addLayout(tCLayout);
     usmAlgorithmLayout->addWidget(applyUsmAlgorithmButton);
     usmAlgorithmGroup->setLayout(usmAlgorithmLayout);
 
