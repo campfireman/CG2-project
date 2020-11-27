@@ -356,10 +356,23 @@ void ImageViewer::changeContrast(int value)
 {
     if (imageIsLoaded())
     {
+        int middle = (originalImage->width() * originalImage->height()) / 2;
+        int sum = 0;
+        int b = 0;
+        // find the middle
+        for (int i = 0; i < GRAY_SPECTRUM; i++)
+        {
+            sum += o_hist[i];
+            if (sum >= middle)
+            {
+                b = i;
+                break;
+            }
+        }
         double factor = (value / 10.0) + 1;
-        iteratePixels([this, factor](int i, int j) {
+        iteratePixels([this, factor, b](int i, int j) {
             std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
-            int intensity = (int)(std::get<0>(color) * factor);
+            int intensity = (int)((std::get<0>(color) - b) * factor) + b;
             std::get<0>(color) = intensity > 255 ? 255 : intensity;
             image->setPixelColor(i, j, yCbCrToRgb(color));
         });
@@ -372,6 +385,10 @@ void ImageViewer::changeRobustContrast(int value)
 {
     if (imageIsLoaded())
     {
+        if (value == 0)
+        {
+            return;
+        }
         double factor = (value / 100.0) / 2;
         int MN = image->width() * image->height();
         int n_a_low = MN * factor;
@@ -399,7 +416,9 @@ void ImageViewer::changeRobustContrast(int value)
                 break;
             }
         }
-        double ratio = (GRAY_SPECTRUM - 1) / (double)(a_high - a_low);
+        int a_min = 0;
+        int a_max = GRAY_SPECTRUM - 1;
+        double ratio = (a_max - a_min) / (double)(a_high - a_low);
         iteratePixels([this, a_low, a_high, ratio](int i, int j) {
             std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
             int intensity = std::get<0>(color);
@@ -533,7 +552,6 @@ void ImageViewer::applyFilter(Eigen::MatrixXd filter)
 
         if (isSeparable)
         {
-            // use SVD to determine if filter is separable
             // thanks to https://web.archive.org/web/20200804115435/https://bartwronski.com/2020/02/03/separate-your-filters-svd-and-low-rank-approximation-of-image-filters/
             VectorXd H_x = svd.matrixV()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
             VectorXd H_y = svd.matrixU()(Eigen::all, 0) * sqrt(svd.singularValues()[0]);
@@ -1338,6 +1356,11 @@ bool ImageViewer::loadFile(const QString &fileName)
     scaleFactor = 1.0;
 
     emit imageUpdated(image);
+    // reset histogram
+    for (int i = 0; i < GRAY_SPECTRUM; i++)
+    {
+        o_hist[i] = 0;
+    }
     createHistogram(originalImage, o_hist);
     setDefaults();
 
