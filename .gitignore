@@ -36,3 +36,6 @@ log.txt
 *.exe
 *.out
 *.app
+
+*.pro.user
+*.pro.user.*
