@@ -51,7 +51,7 @@ class ImageViewer : public QMainWindow
 private slots:
     void imageChanged(QImage *image);
     void applyExampleAlgorithmClicked();
-    void crossSliderValueChanged(int value);
+    void drawCrossClicked();
     void quantizationSliderValueChanged(int value);
     void brightnessSliderValueChanged(int value);
     void contrastSliderValueChanged(int value);

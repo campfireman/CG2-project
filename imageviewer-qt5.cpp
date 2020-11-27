@@ -112,9 +112,9 @@ void ImageViewer::applyExampleAlgorithmClicked()
     }
 }
 
-void ImageViewer::crossSliderValueChanged(int value)
+void ImageViewer::drawCrossClicked()
 {
-    drawCross(value);
+    drawCross(crossSlider->value());
 }
 
 void ImageViewer::quantizationSliderValueChanged(int value)
@@ -997,10 +997,14 @@ void ImageViewer::generateControlPanels()
     QLabel *crossSliderLabel = new QLabel("Cross width");
     crossSlider = new QSlider(Qt::Horizontal);
     crossSlider->setValue(DEFAULT_CROSS_SLIDER);
-    QObject::connect(crossSlider, SIGNAL(valueChanged(int)), this, SLOT(crossSliderValueChanged(int)));
+
+    QPushButton *drawCrossButton = new QPushButton();
+    drawCrossButton->setText("Draw Cross");
+    QObject::connect(drawCrossButton, SIGNAL(clicked()), this, SLOT(drawCrossClicked()));
 
     cross_layout->addWidget(crossSliderLabel);
     cross_layout->addWidget(crossSlider);
+    cross_layout->addWidget(drawCrossButton);
     cross_group->setLayout(cross_layout);
 
     m_option_layout1->addWidget(button1);
