@@ -372,7 +372,7 @@ void ImageViewer::changeContrast(int value)
                 break;
             }
         }
-        double factor = (value / 10.0) + 1;
+        double factor = (value / 100.0) + 1;
         iteratePixels([this, factor, b](int i, int j) {
             std::tuple<int, int, int> color = rgbToYCbCr(originalImage->pixelColor(i, j));
             int intensity = (int)((std::get<0>(color) - b) * factor) + b;
@@ -1045,7 +1045,7 @@ void ImageViewer::generateControlPanels()
     brightnessLayout->addWidget(brightnessSlider);
 
     contrastSlider = new QSlider(Qt::Horizontal);
-    contrastSlider->setRange(0, 10);
+    contrastSlider->setRange(0, 100);
     contrastSlider->setValue(DEFAULT_BRIGHTNESS_SLIDER);
     QObject::connect(contrastSlider, SIGNAL(valueChanged(int)), this, SLOT(contrastSliderValueChanged(int)));
 
